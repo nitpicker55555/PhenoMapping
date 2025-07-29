@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}Data Quality - Plant Phenology Observation Data Visualization Platform{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>
+            <i class="fas fa-shield-alt text-warning"></i>
+            Data Quality Monitoring
+        </h2>
+        <p class="text-muted">Monitor and analyze the quality status of phenological observation data</p>
+    </div>
+</div>
+
+<!-- Quality overview cards -->
+<div class="row mb-4">
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title">High Quality Data</h6>
+                        <h3 class="mb-0" id="high-quality-count">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                        </h3>
+                        <small class="opacity-75">Routine inspection and correction completed</small>
+                    </div>
+                    <div class="display-6">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card bg-warning text-white h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title">Medium Quality Data</h6>
+                        <h3 class="mb-0" id="medium-quality-count">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                        </h3>
+                        <small class="opacity-75">Inspected but not corrected</small>
+                    </div>
+                    <div class="display-6">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title">Basic Data</h6>
+                        <h3 class="mb-0" id="basic-quality-count">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                        </h3>
+                        <small class="opacity-75">Only formal inspection completed</small>
+                    </div>
+                    <div class="display-6">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quality analysis charts -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Quality level distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="quality-distribution-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Annual quality trends
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="quality-trend-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed quality analysis -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Annual detailed quality distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="loading text-center" id="detailed-loading">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-2">Analyzing data quality...</p>
+                </div>
+                <canvas id="quality-detailed-chart" style="display: none;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quality level description and data table -->
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>
+                    Quality issue analysis
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="quality-issues-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Year</th>
+                                <th>高Quality(%)</th>
+                                <th>中等Quality(%)</th>
+                                <th>基础Quality(%)</th>
+                                <th>总记录数</th>
+                                <th>Quality评分</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Quality level description
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">10</span>
+                        <strong>High Quality Data</strong>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Data checked in ROUTINE and completed routine correction processing
+                    </p>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-warning me-2">7</span>
+                        <strong>Medium Quality Data</strong>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Data checked in ROUTINE but not corrected
+                    </p>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-info me-2">1</span>
+                        <strong>Basic Data</strong>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Only completed formal inspection during decoding and loading
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    Quality Recommendations
+                </h6>
+            </div>
+            <div class="card-body" id="quality-recommendations">
+                <div class="loading text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let qualityData = null;
+
+$(document).ready(function() {
+    loadQualityData();
+});
+
+function loadQualityData() {
+    $.get('/api/quality')
+        .done(function(data) {
+            qualityData = data;
+            updateQualityOverview(data.quality_levels);
+            createQualityDistributionChart(data.quality_levels);
+            createQualityTrendChart(data.quality_by_year);
+            createDetailedQualityChart(data.quality_by_year);
+            updateQualityTable(data.quality_by_year);
+            generateQualityRecommendations(data);
+        })
+        .fail(function() {
+            alert('Failed to load quality data');
+        });
+}
+
+function updateQualityOverview(qualityLevels) {
+    qualityLevels.forEach(level => {
+        const count = parseInt(level.count) || 0;
+        const formattedCount = count.toLocaleString();
+        
+        if (level.id === '10') {
+            $('#high-quality-count').html(formattedCount);
+        } else if (level.id === '7') {
+            $('#medium-quality-count').html(formattedCount);
+        } else if (level.id === '1') {
+            $('#basic-quality-count').html(formattedCount);
+        }
+    });
+}
+
+function createQualityDistributionChart(qualityLevels) {
+    const ctx = document.getElementById('quality-distribution-chart').getContext('2d');
+    
+    const labels = qualityLevels.map(level => {
+        if (level.id === '10') return '高Quality';
+        if (level.id === '7') return '中等Quality';
+        if (level.id === '1') return '基础Quality';
+        return `Quality等级 ${level.id}`;
+    });
+    
+    const data = qualityLevels.map(level => parseInt(level.count) || 0);
+    const colors = ['#28a745', '#ffc107', '#17a2b8'];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = data.reduce((sum, val) => sum + val, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed.toLocaleString()} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createQualityTrendChart(qualityByYear) {
+    const ctx = document.getElementById('quality-trend-chart').getContext('2d');
+    
+    // 按Year组织数据
+    const yearData = {};
+    qualityByYear.forEach(item => {
+        const year = item.reference_year;
+        if (!yearData[year]) {
+            yearData[year] = {};
+        }
+        
+        let qualityLevel = 'Other';
+        if (item.description.includes('routinemäßige Korrektur beendet')) {
+            qualityLevel = '高Quality';
+        } else if (item.description.includes('geprüft, aber keine Korrekturen')) {
+            qualityLevel = '中等Quality';
+        } else if (item.description.includes('nur formale Prüfung')) {
+            qualityLevel = '基础Quality';
+        }
+        
+        yearData[year][qualityLevel] = parseInt(item.count) || 0;
+    });
+    
+    const years = Object.keys(yearData).sort();
+    const highQuality = years.map(year => yearData[year]['高Quality'] || 0);
+    const mediumQuality = years.map(year => yearData[year]['中等Quality'] || 0);
+    const basicQuality = years.map(year => yearData[year]['基础Quality'] || 0);
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [
+                {
+                    label: '高Quality',
+                    data: highQuality,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    fill: false,
+                    tension: 0.4
+                },
+                {
+                    label: '中等Quality',
+                    data: mediumQuality,
+                    borderColor: '#ffc107',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    fill: false,
+                    tension: 0.4
+                },
+                {
+                    label: '基础Quality',
+                    data: basicQuality,
+                    borderColor: '#17a2b8',
+                    backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                    fill: false,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Record Count'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createDetailedQualityChart(qualityByYear) {
+    setTimeout(function() {
+        $('#detailed-loading').hide();
+        $('#quality-detailed-chart').show();
+        
+        const ctx = document.getElementById('quality-detailed-chart').getContext('2d');
+        
+        // 处理数据 - 只显示2010years以后的数据
+        const yearData = {};
+        qualityByYear.forEach(item => {
+            const year = parseInt(item.reference_year);
+            if (year >= 2010) {
+                if (!yearData[year]) {
+                    yearData[year] = { high: 0, medium: 0, basic: 0 };
+                }
+                
+                if (item.description.includes('routinemäßige Korrektur beendet')) {
+                    yearData[year].high = parseInt(item.count) || 0;
+                } else if (item.description.includes('geprüft, aber keine Korrekturen')) {
+                    yearData[year].medium = parseInt(item.count) || 0;
+                } else if (item.description.includes('nur formale Prüfung')) {
+                    yearData[year].basic = parseInt(item.count) || 0;
+                }
+            }
+        });
+        
+        const years = Object.keys(yearData).sort();
+        const highData = years.map(year => yearData[year].high);
+        const mediumData = years.map(year => yearData[year].medium);
+        const basicData = years.map(year => yearData[year].basic);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: years,
+                datasets: [
+                    {
+                        label: '高Quality',
+                        data: highData,
+                        backgroundColor: '#28a745',
+                        stack: 'quality'
+                    },
+                    {
+                        label: '中等Quality',
+                        data: mediumData,
+                        backgroundColor: '#ffc107',
+                        stack: 'quality'
+                    },
+                    {
+                        label: '基础Quality',
+                        data: basicData,
+                        backgroundColor: '#17a2b8',
+                        stack: 'quality'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Record Count'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    },
+                    x: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Year'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const year = context.label;
+                                const yearTotal = highData[context.dataIndex] + 
+                                                mediumData[context.dataIndex] + 
+                                                basicData[context.dataIndex];
+                                const percentage = ((context.parsed.y / yearTotal) * 100).toFixed(1);
+                                return `占该years ${percentage}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }, 1500);
+}
+
+function updateQualityTable(qualityByYear) {
+    // 处理数据
+    const yearStats = {};
+    qualityByYear.forEach(item => {
+        const year = item.reference_year;
+        const count = parseInt(item.count) || 0;
+        
+        if (!yearStats[year]) {
+            yearStats[year] = { high: 0, medium: 0, basic: 0, total: 0 };
+        }
+        
+        if (item.description.includes('routinemäßige Korrektur beendet')) {
+            yearStats[year].high = count;
+        } else if (item.description.includes('geprüft, aber keine Korrekturen')) {
+            yearStats[year].medium = count;
+        } else if (item.description.includes('nur formale Prüfung')) {
+            yearStats[year].basic = count;
+        }
+        
+        yearStats[year].total += count;
+    });
+    
+    const tbody = $('#quality-issues-table tbody');
+    tbody.empty();
+    
+    // 按Year排序（最新Year在前）
+    const sortedYears = Object.keys(yearStats).sort((a, b) => b - a);
+    
+    sortedYears.slice(0, 15).forEach(year => { // 只显示最近15years
+        const stats = yearStats[year];
+        const total = stats.total;
+        
+        if (total === 0) return;
+        
+        const highPct = ((stats.high / total) * 100).toFixed(1);
+        const mediumPct = ((stats.medium / total) * 100).toFixed(1);
+        const basicPct = ((stats.basic / total) * 100).toFixed(1);
+        
+        // 计算Quality评分 (高Quality=3分，中等=2分，基础=1分)
+        const qualityScore = ((stats.high * 3 + stats.medium * 2 + stats.basic * 1) / total).toFixed(1);
+        
+        let scoreClass = 'text-success';
+        if (qualityScore < 2) scoreClass = 'text-danger';
+        else if (qualityScore < 2.5) scoreClass = 'text-warning';
+        
+        tbody.append(`
+            <tr>
+                <td><strong>${year}</strong></td>
+                <td><span class="text-success">${highPct}%</span></td>
+                <td><span class="text-warning">${mediumPct}%</span></td>
+                <td><span class="text-info">${basicPct}%</span></td>
+                <td>${total.toLocaleString()}</td>
+                <td>
+                    <span class="fw-bold ${scoreClass}">${qualityScore}</span>
+                    <small class="text-muted">/3.0</small>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function generateQualityRecommendations(data) {
+    const qualityLevels = data.quality_levels;
+    const totalRecords = qualityLevels.reduce((sum, level) => sum + (parseInt(level.count) || 0), 0);
+    
+    let highQualityCount = 0;
+    let mediumQualityCount = 0;
+    let basicQualityCount = 0;
+    
+    qualityLevels.forEach(level => {
+        const count = parseInt(level.count) || 0;
+        if (level.id === '10') highQualityCount = count;
+        else if (level.id === '7') mediumQualityCount = count;
+        else if (level.id === '1') basicQualityCount = count;
+    });
+    
+    const highPct = (highQualityCount / totalRecords * 100).toFixed(1);
+    const mediumPct = (mediumQualityCount / totalRecords * 100).toFixed(1);
+    const basicPct = (basicQualityCount / totalRecords * 100).toFixed(1);
+    
+    let recommendations = '<div class="alert alert-light">';
+    
+    if (parseFloat(highPct) >= 80) {
+        recommendations += '<div class="mb-2"><i class="fas fa-check-circle text-success me-2"></i><strong>Excellent data quality</strong></div>';
+        recommendations += '<p class="small mb-0">High Quality Data占比达到 ' + highPct + '%，Data reliability is very high。</p>';
+    } else if (parseFloat(highPct) >= 60) {
+        recommendations += '<div class="mb-2"><i class="fas fa-info-circle text-info me-2"></i><strong>Good data quality</strong></div>';
+        recommendations += '<p class="small mb-2">High Quality Data占比 ' + highPct + '%，Overall quality is good。</p>';
+        recommendations += '<p class="small mb-0 text-muted">Recommendation: Continue optimizing data processing workflows。</p>';
+    } else {
+        recommendations += '<div class="mb-2"><i class="fas fa-exclamation-triangle text-warning me-2"></i><strong>Needs attention</strong></div>';
+        recommendations += '<p class="small mb-2">High Quality Data占比仅 ' + highPct + '%。</p>';
+        recommendations += '<p class="small mb-0 text-muted">Recommendation: Strengthen data quality control and post-processing。</p>';
+    }
+    
+    recommendations += '</div>';
+    
+    recommendations += '<div class="mt-3">';
+    recommendations += '<h6 class="text-muted">Data distribution</h6>';
+    recommendations += '<div class="progress mb-2" style="height: 20px;">';
+    recommendations += `<div class="progress-bar bg-success" style="width: ${highPct}%">${highPct}%</div>`;
+    recommendations += `<div class="progress-bar bg-warning" style="width: ${mediumPct}%">${mediumPct}%</div>`;
+    recommendations += `<div class="progress-bar bg-info" style="width: ${basicPct}%">${basicPct}%</div>`;
+    recommendations += '</div>';
+    recommendations += '</div>';
+    
+    $('#quality-recommendations').html(recommendations);
+}
+</script>
+{% endblock %}

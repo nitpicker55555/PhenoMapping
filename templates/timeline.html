@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block title %}Time Analysis - Plant Phenology Observation Data Visualization Platform{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>
+            <i class="fas fa-chart-line text-primary"></i>
+            Phenological Period Time Analysis
+        </h2>
+        <p class="text-muted">Analyze interannual variation trends of plant phenological periods and explore climate change impacts</p>
+    </div>
+</div>
+
+<!-- Analysis Parameters Selection -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-sliders-h me-2"></i>
+                    Analysis Parameter Settings
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="species-select" class="form-label">Select Species</label>
+                        <select class="form-select" id="species-select" required>
+                            <option value="">Please select species...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="phase-select" class="form-label">Select Phenological Phase</label>
+                        <select class="form-select" id="phase-select" required>
+                            <option value="">Please select phenological phase...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="year-start" class="form-label">Start Year</label>
+                        <input type="number" class="form-control" id="year-start" min="1953" max="2023" value="2000">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="year-end" class="form-label">End Year</label>
+                        <input type="number" class="form-control" id="year-end" min="1953" max="2023" value="2023">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100 mt-4" id="analyze-btn">
+                            <i class="fas fa-play me-2"></i>Start Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Results -->
+<div class="row mb-4" id="analysis-results" style="display: none;">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-area me-2"></i>
+                    Phenological Period Interannual Trends
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="trend-chart" height="400"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Analysis Summary
+                </h6>
+            </div>
+            <div class="card-body" id="analysis-summary">
+                <!-- Analysis result summary -->
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Phenological Calendar
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="phenology-calendar">
+                    <!-- Phenological calendar -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistical Analysis -->
+<div class="row mb-4" id="statistics-section" style="display: none;">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Annual Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="yearly-distribution" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Observation Count Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="observation-stats" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomaly Year Detection -->
+<div class="row mb-4" id="anomaly-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Anomaly Year Detection
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="anomaly-results">
+                    <!-- Anomaly year detection results -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Data Table -->
+<div class="row" id="data-table-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>
+                    Detailed Observation Data
+                </h5>
+                <button class="btn btn-outline-secondary btn-sm" id="export-data">
+                    <i class="fas fa-download me-1"></i>Export Data
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="observation-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Year</th>
+                                <th>Station</th>
+                                <th>Date</th>
+                                <th>Day of Year</th>
+                                <th>Species</th>
+                                <th>Phenological Phase</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Data will be populated through JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentTrendData = null;
+let currentObservationData = null;
+
+$(document).ready(function() {
+    loadSpeciesData();
+    loadPhasesData();
+    
+    // Analysis button event
+    $('#analyze-btn').click(performAnalysis);
+    
+    // Export data event
+    $('#export-data').click(exportData);
+    
+    // Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const stationId = urlParams.get('station');
+    if (stationId) {
+        // If there is a station parameter, preselect data related to that station
+        console.log('Preselected station ID:', stationId);
+    }
+});
+
+function loadSpeciesData() {
+    $.get('/api/species')
+        .done(function(species) {
+            const select = $('#species-select');
+            species.forEach(function(sp) {
+                select.append(`
+                    <option value="${sp.id}" data-name="${sp.species_name_en}">
+                        ${sp.species_name_en} (${sp.species_name_de})
+                    </option>
+                `);
+            });
+        })
+        .fail(function() {
+            alert('Failed to load species data');
+        });
+}
+
+function loadPhasesData() {
+    $.get('/api/phases')
+        .done(function(phases) {
+            const select = $('#phase-select');
+            phases.forEach(function(phase) {
+                select.append(`
+                    <option value="${phase.id}" data-name="${phase.phase_name_en}">
+                        ${phase.phase_name_en} (${phase.phase_name_de})
+                    </option>
+                `);
+            });
+        })
+        .fail(function() {
+            alert('Failed to load phenological phase data');
+        });
+}
+
+function performAnalysis() {
+    const speciesId = $('#species-select').val();
+    const phaseId = $('#phase-select').val();
+    const yearStart = $('#year-start').val();
+    const yearEnd = $('#year-end').val();
+    
+    if (!speciesId || !phaseId) {
+        alert('Please select species and phenological phase');
+        return;
+    }
+    
+    // Show loading status
+    $('#analyze-btn').html('<div class="spinner-border spinner-border-sm me-2"></div>Analyzing...');
+    $('#analyze-btn').prop('disabled', true);
+    
+    // Get trend data
+    $.get('/api/trends', {
+        species_id: speciesId,
+        phase_id: phaseId,
+        year_start: yearStart,
+        year_end: yearEnd
+    })
+    .done(function(data) {
+        currentTrendData = data;
+        displayTrendAnalysis(data);
+        loadObservationData(speciesId, phaseId, yearStart, yearEnd);
+    })
+    .fail(function() {
+        alert('Analysis failed, please try again');
+    })
+    .always(function() {
+        $('#analyze-btn').html('<i class="fas fa-play me-2"></i>Start Analysis');
+        $('#analyze-btn').prop('disabled', false);
+    });
+}
+
+function displayTrendAnalysis(data) {
+    if (data.length === 0) {
+        alert('No data found matching the criteria');
+        return;
+    }
+    
+    // Show result area
+    $('#analysis-results').show();
+    $('#statistics-section').show();
+    $('#anomaly-section').show();
+    $('#data-table-section').show();
+    
+    // Create trend chart
+    const ctx = document.getElementById('trend-chart').getContext('2d');
+    if (window.trendChart) {
+        window.trendChart.destroy();
+    }
+    
+    const years = data.map(d => d.reference_year);
+    const avgDays = data.map(d => parseFloat(d.avg_day_of_year));
+    
+    window.trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [{
+                label: 'Average Day of Year',
+                data: avgDays,
+                borderColor: '#2c5234',
+                backgroundColor: 'rgba(44, 82, 52, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const dayOfYear = context.parsed.y;
+                            const date = dayOfYearToDate(2020, Math.round(dayOfYear)); // Use 2020 as reference
+                            return `Approximately ${date}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Day of Year (days)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            const date = dayOfYearToDate(2020, Math.round(value));
+                            return `${Math.round(value)} (${date})`;
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Generate analysis summary
+    generateAnalysisSummary(data);
+    
+    // Create annual distribution chart
+    createYearlyDistribution(data);
+    
+    // Detect anomaly years
+    detectAnomalies(data);
+}
+
+function generateAnalysisSummary(data) {
+    const avgDays = data.map(d => parseFloat(d.avg_day_of_year));
+    const years = data.map(d => parseInt(d.reference_year));
+    const totalObs = data.reduce((sum, d) => sum + parseInt(d.observation_count), 0);
+    
+    const minDay = Math.min(...avgDays);
+    const maxDay = Math.max(...avgDays);
+    const avgDay = avgDays.reduce((sum, day) => sum + day, 0) / avgDays.length;
+    
+    const minYear = years[avgDays.indexOf(minDay)];
+    const maxYear = years[avgDays.indexOf(maxDay)];
+    
+    // Calculate trend (simple linear regression)
+    const trend = calculateTrend(years, avgDays);
+    const trendDirection = trend > 0 ? 'Delayed' : 'Advanced';
+    const trendMagnitude = Math.abs(trend * 10).toFixed(1); // Change per 10 years
+    
+    $('#analysis-summary').html(`
+        <div class="mb-3">
+            <h6 class="text-primary">Data Overview</h6>
+            <ul class="list-unstyled">
+                <li><strong>Observation Records:</strong> ${totalObs.toLocaleString()}</li>
+                <li><strong>Year Range:</strong> ${Math.min(...years)} - ${Math.max(...years)}</li>
+                <li><strong>Average Phenological Period:</strong> Day ${Math.round(avgDay)}</li>
+            </ul>
+        </div>
+        
+        <div class="mb-3">
+            <h6 class="text-success">Extreme Value Analysis</h6>
+            <ul class="list-unstyled">
+                <li><strong>Earliest Year:</strong> ${minYear} (Day ${Math.round(minDay)})</li>
+                <li><strong>Latest Year:</strong> ${maxYear} (Day ${Math.round(maxDay)})</li>
+                <li><strong>Time Span:</strong> ${Math.round(maxDay - minDay)} days</li>
+            </ul>
+        </div>
+        
+        <div class="mb-3">
+            <h6 class="text-warning">Trend Analysis</h6>
+            <p class="mb-1">
+                <span class="badge ${trend > 0 ? 'bg-danger' : 'bg-success'}">
+                    ${trendDirection} Trend
+                </span>
+            </p>
+            <p class="small text-muted mb-0">
+                ${trendDirection} approximately ${trendMagnitude} days per 10 years
+            </p>
+        </div>
+    `);
+}
+
+function createYearlyDistribution(data) {
+    const ctx = document.getElementById('yearly-distribution').getContext('2d');
+    if (window.yearlyChart) {
+        window.yearlyChart.destroy();
+    }
+    
+    const observationCounts = data.map(d => parseInt(d.observation_count));
+    const years = data.map(d => d.reference_year);
+    
+    window.yearlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: years,
+            datasets: [{
+                label: 'Observation Count',
+                data: observationCounts,
+                backgroundColor: '#52b788',
+                borderColor: '#2c5234',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Observation Count'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Create observation statistics pie chart
+    const obsCtx = document.getElementById('observation-stats').getContext('2d');
+    if (window.obsChart) {
+        window.obsChart.destroy();
+    }
+    
+    const totalObs = observationCounts.reduce((sum, count) => sum + count, 0);
+    const recentObs = observationCounts.slice(-10).reduce((sum, count) => sum + count, 0);
+    const earlyObs = totalObs - recentObs;
+    
+    window.obsChart = new Chart(obsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Last 10 Years', 'Earlier Data'],
+            datasets: [{
+                data: [recentObs, earlyObs],
+                backgroundColor: ['#2c5234', '#95d5b2']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function detectAnomalies(data) {
+    const avgDays = data.map(d => parseFloat(d.avg_day_of_year));
+    const years = data.map(d => d.reference_year);
+    
+    // Calculate standard deviation
+    const mean = avgDays.reduce((sum, day) => sum + day, 0) / avgDays.length;
+    const variance = avgDays.reduce((sum, day) => sum + Math.pow(day - mean, 2), 0) / avgDays.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Find outliers (exceeding 2 standard deviations)
+    const anomalies = [];
+    avgDays.forEach((day, index) => {
+        const zScore = Math.abs((day - mean) / stdDev);
+        if (zScore > 2) {
+            anomalies.push({
+                year: years[index],
+                day: day,
+                deviation: day - mean,
+                zScore: zScore
+            });
+        }
+    });
+    
+    if (anomalies.length > 0) {
+        let anomalyHtml = '<div class="row g-3">';
+        anomalies.forEach(anomaly => {
+            const isEarly = anomaly.deviation < 0;
+            anomalyHtml += `
+                <div class="col-md-6">
+                    <div class="alert ${isEarly ? 'alert-info' : 'alert-warning'} mb-0">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-${isEarly ? 'arrow-down' : 'arrow-up'} me-1"></i>
+                            Year ${anomaly.year}
+                        </h6>
+                        <p class="mb-1">
+                            <strong>Phenological Period:</strong> Day ${Math.round(anomaly.day)}
+                        </p>
+                        <p class="mb-0">
+                            <strong>Deviation:</strong> ${isEarly ? 'Advanced' : 'Delayed'} ${Math.abs(anomaly.deviation).toFixed(1)} days
+                        </p>
+                    </div>
+                </div>
+            `;
+        });
+        anomalyHtml += '</div>';
+        $('#anomaly-results').html(anomalyHtml);
+    } else {
+        $('#anomaly-results').html(`
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                No significant anomaly years detected
+            </div>
+        `);
+    }
+}
+
+function loadObservationData(speciesId, phaseId, yearStart, yearEnd) {
+    $.get('/api/observations', {
+        species_id: speciesId,
+        phase_id: phaseId,
+        year_start: yearStart,
+        year_end: yearEnd,
+        limit: 500
+    })
+    .done(function(data) {
+        currentObservationData = data;
+        updateObservationTable(data);
+    })
+    .fail(function() {
+        console.error('Failed to load detailed observation data');
+    });
+}
+
+function updateObservationTable(data) {
+    const tbody = $('#observation-table tbody');
+    tbody.empty();
+    
+    if (data.length === 0) {
+        tbody.append('<tr><td colspan="6" class="text-center text-muted">No detailed observation data available</td></tr>');
+        return;
+    }
+    
+    data.forEach(obs => {
+        tbody.append(`
+            <tr>
+                <td>${obs.reference_year}</td>
+                <td>${obs.station_name}</td>
+                <td>${obs.date ? new Date(obs.date).toLocaleDateString() : 'Unknown'}</td>
+                <td>${obs.day_of_year}</td>
+                <td>${obs.species_name_en}</td>
+                <td>${obs.phase_name_en}</td>
+            </tr>
+        `);
+    });
+    
+    if (data.length >= 500) {
+        tbody.append(`
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    Showing first 500 records...
+                </td>
+            </tr>
+        `);
+    }
+}
+
+function exportData() {
+    if (!currentObservationData) {
+        alert('No data available for export');
+        return;
+    }
+    
+    // Convert to CSV format
+    const headers = ['Year', 'Station', 'Date', 'Day of Year', 'Species', 'Phenological Phase'];
+    const csvContent = [
+        headers.join(','),
+        ...currentObservationData.map(obs => [
+            obs.reference_year,
+            `"${obs.station_name}"`,
+            obs.date ? new Date(obs.date).toLocaleDateString() : '',
+            obs.day_of_year,
+            `"${obs.species_name_en}"`,
+            `"${obs.phase_name_en}"`
+        ].join(','))
+    ].join('\n');
+    
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `phenology_data_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+}
+
+// Utility functions
+function dayOfYearToDate(year, dayOfYear) {
+    const date = new Date(year, 0, dayOfYear);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function calculateTrend(years, values) {
+    const n = years.length;
+    const sumX = years.reduce((sum, year) => sum + year, 0);
+    const sumY = values.reduce((sum, value) => sum + value, 0);
+    const sumXY = years.reduce((sum, year, i) => sum + year * values[i], 0);
+    const sumXX = years.reduce((sum, year) => sum + year * year, 0);
+    
+    return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+}
+</script>
+{% endblock %}

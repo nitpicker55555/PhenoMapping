@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block title %}Species Research - Plant Phenology Observation Data Visualization Platform{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>
+            <i class="fas fa-leaf text-success"></i>
+            Plant Species Research
+        </h2>
+        <p class="text-muted">Explore the phenological characteristics and distribution of 97 plant species</p>
+    </div>
+</div>
+
+<!-- Species Browse and Filter -->
+<div class="row mb-4">
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-search me-2"></i>
+                    Species Browser
+                </h5>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="view-type" id="grid-view" checked>
+                    <label class="btn btn-outline-secondary btn-sm" for="grid-view">
+                        <i class="fas fa-th"></i>
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="view-type" id="list-view">
+                    <label class="btn btn-outline-secondary btn-sm" for="list-view">
+                        <i class="fas fa-list"></i>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="species-search" placeholder="Search species name...">
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="group-filter">
+                            <option value="">All Groups</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="sort-by">
+                            <option value="observation_count">By Observation Count</option>
+                            <option value="name">By Name</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Grid View -->
+                <div id="species-grid" class="row g-3">
+                    <div class="col-12 text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- List View -->
+                <div id="species-list" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Species</th>
+                                    <th>German Name</th>
+                                    <th>Latin Name</th>
+                                    <th>Group</th>
+                                    <th>Observation Count</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="species-table-body">
+                                <!-- Data will be populated via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Species Group Statistics
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="species-groups-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Species Information
+                </h6>
+            </div>
+            <div class="card-body" id="species-info">
+                <p class="text-muted text-center">Click on a species card to view detailed information</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Species Detailed Analysis Modal -->
+<div class="modal fade" id="speciesModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-species-title">
+                    <i class="fas fa-leaf me-2"></i>
+                    Species Detailed Analysis
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Phenophase Time Distribution</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="modal-phenology-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Observation Station Distribution</h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="modal-species-map" style="height: 300px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Basic Information</h6>
+                            </div>
+                            <div class="card-body" id="modal-species-info">
+                                <!-- Basic Information -->
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Phenophase List</h6>
+                            </div>
+                            <div class="card-body" id="modal-phases-list">
+                                <!-- Phenophase List -->
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Observation Statistics</h6>
+                            </div>
+                            <div class="card-body" id="modal-species-stats">
+                                <!-- Observation Statistics -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary" id="view-species-timeline">
+                    <i class="fas fa-chart-line me-1"></i>View Time Trends
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allSpecies = [];
+let currentSpecies = [];
+let selectedSpecies = null;
+let modalMap = null;
+
+$(document).ready(function() {
+    loadSpeciesData();
+    
+    // 事件绑定
+    $('#species-search').on('input', filterSpecies);
+    $('#group-filter').change(filterSpecies);
+    $('#sort-by').change(sortSpecies);
+    $('input[name="view-type"]').change(toggleView);
+    $('#view-species-timeline').click(viewSpeciesTimeline);
+});
+
+function loadSpeciesData() {
+    $.get('/api/species')
+        .done(function(species) {
+            allSpecies = species;
+            currentSpecies = species;
+            
+            // 填充分组筛选器
+            const groups = [...new Set(species.map(s => s.group_name).filter(g => g))];
+            groups.sort();
+            groups.forEach(group => {
+                $('#group-filter').append(`<option value="${group}">${group}</option>`);
+            });
+            
+            displaySpecies(species);
+            createGroupsChart(species);
+        })
+        .fail(function() {
+            alert('Failed to load species');
+        });
+}
+
+function displaySpecies(species) {
+    displayGrid(species);
+    displayList(species);
+}
+
+function displayGrid(species) {
+    const grid = $('#species-grid');
+    grid.empty();
+    
+    if (species.length === 0) {
+        grid.html('<div class="col-12 text-center text-muted">没有找到符合条件的物种</div>');
+        return;
+    }
+    
+    species.forEach(sp => {
+        const observationCount = parseInt(sp.observation_count) || 0;
+        
+        grid.append(`
+            <div class="col-md-4 col-sm-6 mb-3">
+                <div class="card species-card h-100" data-species-id="${sp.id}" style="cursor: pointer;">
+                    <div class="card-body">
+                        <h6 class="card-title text-success">${sp.species_name_en}</h6>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                <strong>德文:</strong> ${sp.species_name_de}<br>
+                                <strong>拉丁名:</strong> <em>${sp.species_name_la}</em>
+                            </small>
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                ${sp.group_name ? `<span class="badge bg-light text-dark">${sp.group_name}</span>` : ''}
+                            </small>
+                            <span class="badge bg-primary">${observationCount.toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+    });
+    
+    // 添加点击事件
+    $('.species-card').click(function() {
+        const speciesId = $(this).data('species-id');
+        const species = allSpecies.find(s => s.id == speciesId);
+        showSpeciesDetail(species);
+    });
+}
+
+function displayList(species) {
+    const tbody = $('#species-table-body');
+    tbody.empty();
+    
+    if (species.length === 0) {
+        tbody.html('<tr><td colspan="6" class="text-center text-muted">没有找到符合条件的物种</td></tr>');
+        return;
+    }
+    
+    species.forEach(sp => {
+        const observationCount = parseInt(sp.observation_count) || 0;
+        
+        tbody.append(`
+            <tr style="cursor: pointer;" data-species-id="${sp.id}">
+                <td><strong class="text-success">${sp.species_name_en}</strong></td>
+                <td>${sp.species_name_de}</td>
+                <td><em>${sp.species_name_la}</em></td>
+                <td>
+                    ${sp.group_name ? `<span class="badge bg-light text-dark">${sp.group_name}</span>` : '-'}
+                </td>
+                <td>${observationCount.toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-outline-primary btn-sm species-detail-btn" data-species-id="${sp.id}">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+    
+    // 添加点击事件
+    $('#species-table-body tr').click(function() {
+        const speciesId = $(this).data('species-id');
+        const species = allSpecies.find(s => s.id == speciesId);
+        showSpeciesDetail(species);
+    });
+}
+
+function createGroupsChart(species) {
+    const groupCounts = {};
+    species.forEach(sp => {
+        const group = sp.group_name || '未分组';
+        groupCounts[group] = (groupCounts[group] || 0) + 1;
+    });
+    
+    const ctx = document.getElementById('species-groups-chart').getContext('2d');
+    if (window.groupsChart) {
+        window.groupsChart.destroy();
+    }
+    
+    window.groupsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(groupCounts),
+            datasets: [{
+                data: Object.values(groupCounts),
+                backgroundColor: [
+                    '#2c5234', '#52b788', '#95d5b2', '#b7e4c7', 
+                    '#d8f3dc', '#74c69d', '#40916c', '#081c15'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 10
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function filterSpecies() {
+    const searchTerm = $('#species-search').val().toLowerCase();
+    const groupFilter = $('#group-filter').val();
+    
+    let filtered = allSpecies.filter(sp => {
+        const matchesSearch = !searchTerm || 
+            sp.species_name_en.toLowerCase().includes(searchTerm) ||
+            sp.species_name_de.toLowerCase().includes(searchTerm) ||
+            sp.species_name_la.toLowerCase().includes(searchTerm);
+            
+        const matchesGroup = !groupFilter || sp.group_name === groupFilter;
+        
+        return matchesSearch && matchesGroup;
+    });
+    
+    currentSpecies = filtered;
+    sortSpecies();
+}
+
+function sortSpecies() {
+    const sortBy = $('#sort-by').val();
+    
+    currentSpecies.sort((a, b) => {
+        if (sortBy === 'observation_count') {
+            return (parseInt(b.observation_count) || 0) - (parseInt(a.observation_count) || 0);
+        } else if (sortBy === 'name') {
+            return a.species_name_en.localeCompare(b.species_name_en);
+        }
+    });
+    
+    displaySpecies(currentSpecies);
+}
+
+function toggleView() {
+    if ($('#grid-view').is(':checked')) {
+        $('#species-grid').show();
+        $('#species-list').hide();
+    } else {
+        $('#species-grid').hide();
+        $('#species-list').show();
+    }
+}
+
+function showSpeciesDetail(species) {
+    selectedSpecies = species;
+    
+    // 更新模态框标题
+    $('#modal-species-title').html(`
+        <i class="fas fa-leaf me-2"></i>
+        ${species.species_name_en}
+    `);
+    
+    // 更新基本信息
+    $('#modal-species-info').html(`
+        <div class="mb-3">
+            <h6 class="text-primary">物种名称</h6>
+            <p class="mb-1"><strong>英文：</strong> ${species.species_name_en}</p>
+            <p class="mb-1"><strong>德文：</strong> ${species.species_name_de}</p>
+            <p class="mb-0"><strong>拉丁名：</strong> <em>${species.species_name_la}</em></p>
+        </div>
+        
+        <div class="mb-3">
+            <h6 class="text-success">分类信息</h6>
+            <p class="mb-0">
+                <span class="badge bg-light text-dark">
+                    ${species.group_name || '未分组'}
+                </span>
+            </p>
+        </div>
+        
+        <div>
+            <h6 class="text-info">观测概况</h6>
+            <p class="mb-0">
+                <span class="badge bg-primary">
+                    ${(parseInt(species.observation_count) || 0).toLocaleString()} 条记录
+                </span>
+            </p>
+        </div>
+    `);
+    
+    // 加载该物种的详细数据
+    loadSpeciesDetailData(species.id);
+    
+    // 显示模态框
+    $('#speciesModal').modal('show');
+}
+
+function loadSpeciesDetailData(speciesId) {
+    // 获取该物种的观测数据
+    $.get('/api/observations', {
+        species_id: speciesId,
+        limit: 1000
+    })
+    .done(function(observations) {
+        // 分析物候期分布
+        const phaseStats = {};
+        const stationStats = {};
+        
+        observations.forEach(obs => {
+            const phase = obs.phase_name_en;
+            const station = obs.station_name;
+            
+            phaseStats[phase] = (phaseStats[phase] || 0) + 1;
+            if (obs.latitude && obs.longitude) {
+                stationStats[station] = {
+                    lat: parseFloat(obs.latitude),
+                    lng: parseFloat(obs.longitude),
+                    count: (stationStats[station]?.count || 0) + 1
+                };
+            }
+        });
+        
+        // 更新物候期列表
+        updatePhasesList(phaseStats);
+        
+        // 更新统计信息
+        updateSpeciesStats(observations, phaseStats, stationStats);
+        
+        // 创建物候期图表
+        createPhenologyChart(phaseStats);
+        
+        // 创建地图
+        createSpeciesMap(stationStats);
+    })
+    .fail(function() {
+        console.error('加载物种详细数据失败');
+    });
+}
+
+function updatePhasesList(phaseStats) {
+    const sorted = Object.entries(phaseStats).sort((a, b) => b[1] - a[1]);
+    
+    let html = '<div class="list-group list-group-flush">';
+    sorted.forEach(([phase, count]) => {
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                <span class="small">${phase}</span>
+                <span class="badge bg-secondary">${count}</span>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    $('#modal-phases-list').html(html);
+}
+
+function updateSpeciesStats(observations, phaseStats, stationStats) {
+    const years = [...new Set(observations.map(obs => obs.reference_year))];
+    const yearRange = years.length > 0 ? `${Math.min(...years)} - ${Math.max(...years)}` : '无数据';
+    
+    $('#modal-species-stats').html(`
+        <div class="row g-3">
+            <div class="col-6">
+                <small class="text-muted">观测年份</small>
+                <div class="fw-bold">${years.length} 年</div>
+            </div>
+            <div class="col-6">
+                <small class="text-muted">时间跨度</small>
+                <div class="fw-bold small">${yearRange}</div>
+            </div>
+            <div class="col-6">
+                <small class="text-muted">物候期数</small>
+                <div class="fw-bold">${Object.keys(phaseStats).length}</div>
+            </div>
+            <div class="col-6">
+                <small class="text-muted">观测站点</small>
+                <div class="fw-bold">${Object.keys(stationStats).length}</div>
+            </div>
+        </div>
+    `);
+}
+
+function createPhenologyChart(phaseStats) {
+    const ctx = document.getElementById('modal-phenology-chart').getContext('2d');
+    if (window.modalPhenologyChart) {
+        window.modalPhenologyChart.destroy();
+    }
+    
+    const sorted = Object.entries(phaseStats).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(([phase]) => phase);
+    const data = sorted.map(([, count]) => count);
+    
+    window.modalPhenologyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '观测次数',
+                data: data,
+                backgroundColor: '#52b788',
+                borderColor: '#2c5234',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createSpeciesMap(stationStats) {
+    // 清理之前的地图
+    if (modalMap) {
+        modalMap.remove();
+    }
+    
+    // 创建新地图
+    modalMap = L.map('modal-species-map').setView([51.1657, 10.4515], 6);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(modalMap);
+    
+    // 添加站点标记
+    Object.entries(stationStats).forEach(([station, data]) => {
+        const marker = L.circleMarker([data.lat, data.lng], {
+            color: 'white',
+            fillColor: '#2c5234',
+            fillOpacity: 0.8,
+            weight: 1,
+            radius: Math.min(data.count / 10, 15) + 3
+        }).addTo(modalMap);
+        
+        marker.bindPopup(`
+            <strong>${station}</strong><br>
+            观测次数: ${data.count}
+        `);
+    });
+    
+    // 延迟调整地图大小
+    setTimeout(() => {
+        modalMap.invalidateSize();
+    }, 300);
+}
+
+function viewSpeciesTimeline() {
+    if (selectedSpecies) {
+        $('#speciesModal').modal('hide');
+        window.location.href = `/timeline?species=${selectedSpecies.id}`;
+    }
+}
+
+// 模态框关闭时清理地图
+$('#speciesModal').on('hidden.bs.modal', function() {
+    if (modalMap) {
+        modalMap.remove();
+        modalMap = null;
+    }
+});
+</script>
+{% endblock %}
