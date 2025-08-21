@@ -353,5 +353,83 @@ def api_quality():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/species-by-phase')
+def api_species_by_phase():
+    """根据phase搜索species API"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor = conn.cursor()
+        
+        phase_id = request.args.get('phase_id')
+        if not phase_id:
+            return jsonify({'error': 'phase_id is required'}), 400
+        
+        # 查询具有指定phase的所有species
+        cursor.execute("""
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                sg.group_name,
+                COUNT(DISTINCT o.id) as observation_count,
+                COUNT(DISTINCT o.station_id) as station_count,
+                MIN(o.reference_year) as first_year,
+                MAX(o.reference_year) as last_year
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            LEFT JOIN dwd_species_group sg ON s.id = sg.species_id
+            WHERE o.phase_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la, sg.group_name
+            ORDER BY observation_count DESC
+        """, (phase_id,))
+        
+        species = dict_fetchall(cursor)
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify(species)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/species-phases/<species_id>')
+def api_species_phases(species_id):
+    """获取特定species的所有phases"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor = conn.cursor()
+        
+        # 获取该species的所有phases及其观测统计
+        cursor.execute("""
+            SELECT DISTINCT
+                p.id as phase_id,
+                p.phase_name_de,
+                p.phase_name_en,
+                COUNT(o.id) as observation_count,
+                MIN(o.reference_year) as first_year,
+                MAX(o.reference_year) as last_year,
+                AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year
+            FROM dwd_observation o
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE o.species_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """, (species_id,))
+        
+        phases = dict_fetchall(cursor)
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify(phases)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0',port=9090)

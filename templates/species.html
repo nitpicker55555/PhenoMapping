@@ -35,18 +35,29 @@
                 </div>
             </div>
             <div class="card-body">
+                <!-- Search Filters -->
+                <div class="row mb-2">
+                    <div class="col-12">
+                        <small class="text-muted">Filter species by name, group, or phenological phase:</small>
+                    </div>
+                </div>
                 <div class="row mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <input type="text" class="form-control" id="species-search" placeholder="Search species name...">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <select class="form-select" id="group-filter">
                             <option value="">All Groups</option>
                         </select>
                     </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="phase-filter" style="background-color: #f0f8f0;">
+                            <option value="">All Phases</option>
+                        </select>
+                    </div>
                     <div class="col-md-2">
                         <select class="form-select" id="sort-by">
-                            <option value="observation_count">By Observation Count</option>
+                            <option value="observation_count">By Observations</option>
                             <option value="name">By Name</option>
                         </select>
                     </div>
@@ -195,10 +206,12 @@ let modalMap = null;
 
 $(document).ready(function() {
     loadSpeciesData();
+    loadPhasesData();
     
     // 事件绑定
     $('#species-search').on('input', filterSpecies);
     $('#group-filter').change(filterSpecies);
+    $('#phase-filter').change(filterSpeciesByPhase);
     $('#sort-by').change(sortSpecies);
     $('input[name="view-type"]').change(toggleView);
     $('#view-species-timeline').click(viewSpeciesTimeline);
@@ -440,44 +453,52 @@ function showSpeciesDetail(species) {
 }
 
 function loadSpeciesDetailData(speciesId) {
-    // 获取该Species的观测数据
-    $.get('/api/observations', {
-        species_id: speciesId,
-        limit: 1000
-    })
-    .done(function(observations) {
-        // 分析Phenological Phase分布
+    // 使用新的API获取该Species的所有phases
+    $.get(`/api/species-phases/${speciesId}`)
+    .done(function(phases) {
+        // 创建phase统计对象
         const phaseStats = {};
-        const stationStats = {};
-        
-        observations.forEach(obs => {
-            const phase = obs.phase_name_en;
-            const station = obs.station_name;
-            
-            phaseStats[phase] = (phaseStats[phase] || 0) + 1;
-            if (obs.latitude && obs.longitude) {
-                stationStats[station] = {
-                    lat: parseFloat(obs.latitude),
-                    lng: parseFloat(obs.longitude),
-                    count: (stationStats[station]?.count || 0) + 1
-                };
-            }
+        phases.forEach(phase => {
+            phaseStats[phase.phase_name_en] = phase.observation_count;
         });
         
-        // 更新Phenological Phase列表
-        updatePhasesList(phaseStats);
-        
-        // 更新统计信息
-        updateSpeciesStats(observations, phaseStats, stationStats);
+        // 更新Phenological Phase列表（显示完整的phase列表）
+        updatePhasesListComplete(phases);
         
         // 创建Phenological Phase图表
         createPhenologyChart(phaseStats);
         
-        // 创建地图
-        createSpeciesMap(stationStats);
+        // 获取观测数据用于地图和其他统计
+        $.get('/api/observations', {
+            species_id: speciesId,
+            limit: 1000
+        })
+        .done(function(observations) {
+            const stationStats = {};
+            
+            observations.forEach(obs => {
+                const station = obs.station_name;
+                if (obs.latitude && obs.longitude) {
+                    stationStats[station] = {
+                        lat: parseFloat(obs.latitude),
+                        lng: parseFloat(obs.longitude),
+                        count: (stationStats[station]?.count || 0) + 1
+                    };
+                }
+            });
+            
+            // 更新统计信息
+            updateSpeciesStats(observations, phaseStats, stationStats);
+            
+            // 创建地图
+            createSpeciesMap(stationStats);
+        })
+        .fail(function() {
+            console.error('Failed to load observation data');
+        });
     })
     .fail(function() {
-        console.error('Failed to load species detailed data');
+        console.error('Failed to load species phases data');
     });
 }
 
@@ -493,6 +514,34 @@ function updatePhasesList(phaseStats) {
             </div>
         `;
     });
+    html += '</div>';
+    
+    $('#modal-phases-list').html(html);
+}
+
+function updatePhasesListComplete(phases) {
+    let html = '<div class="list-group list-group-flush">';
+    
+    phases.forEach(phase => {
+        const avgDay = phase.avg_day_of_year ? Math.round(phase.avg_day_of_year) : 'N/A';
+        const dateRange = phase.first_year && phase.last_year ? `${phase.first_year}-${phase.last_year}` : '';
+        
+        html += `
+            <div class="list-group-item py-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="small">${phase.phase_name_en}</div>
+                        <div class="text-muted small">${phase.phase_name_de}</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-secondary">${phase.observation_count}</span>
+                        <div class="text-muted small">Day ${avgDay}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
     html += '</div>';
     
     $('#modal-phases-list').html(html);
@@ -616,5 +665,60 @@ $('#speciesModal').on('hidden.bs.modal', function() {
         modalMap = null;
     }
 });
+
+// 加载所有phases用于筛选
+function loadPhasesData() {
+    $.get('/api/phases')
+        .done(function(phases) {
+            // 填充phase筛选器
+            phases.forEach(phase => {
+                $('#phase-filter').append(`<option value="${phase.id}">${phase.phase_name_en} (${phase.phase_name_de})</option>`);
+            });
+        })
+        .fail(function() {
+            console.error('Failed to load phases data');
+        });
+}
+
+// 根据phase筛选species
+function filterSpeciesByPhase() {
+    const phaseId = $('#phase-filter').val();
+    
+    if (!phaseId) {
+        // 如果没有选择phase，显示所有species
+        currentSpecies = allSpecies;
+        sortSpecies();
+        return;
+    }
+    
+    // 根据phase获取species
+    $.get('/api/species-by-phase', { phase_id: phaseId })
+        .done(function(species) {
+            // 合并species信息
+            const speciesMap = new Map(allSpecies.map(s => [s.id, s]));
+            
+            currentSpecies = species.map(s => ({
+                ...speciesMap.get(s.id),
+                ...s
+            }));
+            
+            displaySpecies(currentSpecies);
+            
+            // 更新species信息显示
+            if (species.length > 0) {
+                $('#species-info').html(`
+                    <p class="mb-2"><strong>Species with selected phase:</strong> ${species.length}</p>
+                    <p class="mb-0 text-muted small">Click on a species card to view detailed information</p>
+                `);
+            } else {
+                $('#species-info').html('<p class="text-muted text-center">No species found with the selected phase</p>');
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter species by phase');
+            currentSpecies = allSpecies;
+            sortSpecies();
+        });
+}
 </script>
 {% endblock %}
