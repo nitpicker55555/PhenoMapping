@@ -135,6 +135,10 @@
                             <i class="fas fa-shield-alt me-1"></i>
                             Quality Monitor
                         </a>
+                        <button id="new-data-btn" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#newDataModal">
+                            <i class="fas fa-database me-1"></i>
+                            New Data
+                        </button>
                     </div>
                 </div>
             </div>
@@ -164,10 +168,158 @@
         </div>
     </div>
 </div>
+
+<!-- New Data Modal -->
+<div class="modal fade" id="newDataModal" tabindex="-1" aria-labelledby="newDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newDataModalLabel">
+                    <i class="fas fa-database me-2"></i>
+                    Pheno New Database Species
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-success me-2">Existing</span>
+                        <span class="text-muted me-3">Species exists in pheno database</span>
+                        <span class="badge bg-warning me-2">New</span>
+                        <span class="text-muted">Species not found in pheno database</span>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="newDataTable">
+                        <thead>
+                            <tr>
+                                <th>Species Name</th>
+                                <th>Observations</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="newDataTableBody">
+                            <tr>
+                                <td colspan="4" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading species data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Species Phases Modal -->
+<div class="modal fade" id="speciesPhasesModal" tabindex="-1" aria-labelledby="speciesPhasesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="speciesPhasesModalLabel">
+                    <i class="fas fa-leaf me-2"></i>
+                    <span id="speciesNameTitle"></span> - Phenological Phases
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Charts Section -->
+                <div class="row mb-4">
+                    <!-- Pheno New Chart -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">Pheno New Database Trends</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Time Range:</label>
+                                    <div class="row g-2">
+                                        <div class="col">
+                                            <input type="number" class="form-control form-control-sm" id="phenoNewStartYear" placeholder="Start Year" min="1800" max="2100">
+                                        </div>
+                                        <div class="col">
+                                            <input type="number" class="form-control form-control-sm" id="phenoNewEndYear" placeholder="End Year" min="1800" max="2100">
+                                        </div>
+                                        <div class="col-auto">
+                                            <button class="btn btn-sm btn-primary" onclick="updatePhenoNewChart()">Update</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="phenoNewChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pheno Chart -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">Pheno Database Trends</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Time Range:</label>
+                                    <div class="row g-2">
+                                        <div class="col">
+                                            <input type="number" class="form-control form-control-sm" id="phenoStartYear" placeholder="Start Year" min="1800" max="2100">
+                                        </div>
+                                        <div class="col">
+                                            <input type="number" class="form-control form-control-sm" id="phenoEndYear" placeholder="End Year" min="1800" max="2100">
+                                        </div>
+                                        <div class="col-auto">
+                                            <button class="btn btn-sm btn-success" onclick="updatePhenoChart()">Update</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="phenoChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Phases List Section -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Pheno New Database Details</h6>
+                        <div id="phenoNewPhasesContent">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Loading...
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success">Pheno Database Details</h6>
+                        <div id="phenoPhasesContent">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+let phenoNewChartInstance = null;
+let phenoChartInstance = null;
+let currentPhenoData = null;
+
 $(document).ready(function() {
     // Load overview data
     loadOverviewData();
@@ -175,6 +327,24 @@ $(document).ready(function() {
     initPreviewMap();
     // Load yearly trend chart
     loadYearlyTrend();
+    
+    // Load new data when modal is shown
+    $('#newDataModal').on('shown.bs.modal', function () {
+        loadNewDataSpecies();
+    });
+    
+    // Destroy charts when modal is hidden to prevent memory leaks
+    $('#speciesPhasesModal').on('hidden.bs.modal', function () {
+        if (phenoNewChartInstance) {
+            phenoNewChartInstance.destroy();
+            phenoNewChartInstance = null;
+        }
+        if (phenoChartInstance) {
+            phenoChartInstance.destroy();
+            phenoChartInstance = null;
+        }
+        currentPhenoData = null;
+    });
 });
 
 function loadOverviewData() {
@@ -281,6 +451,438 @@ function loadYearlyTrend() {
             }
         });
     }, 1500);
+}
+
+function loadNewDataSpecies() {
+    $.get('/api/pheno-new/species')
+        .done(function(species) {
+            let html = '';
+            species.forEach(function(item) {
+                const statusBadge = item.exists_in_pheno 
+                    ? '<span class="badge bg-success">Existing</span>' 
+                    : '<span class="badge bg-warning">New</span>';
+                
+                const rowClass = item.exists_in_pheno ? '' : 'table-warning';
+                
+                html += `
+                    <tr class="${rowClass}">
+                        <td>${item.species_name}</td>
+                        <td>${item.observation_count.toLocaleString()}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewSpeciesPhases('${item.species_name}')">
+                                <i class="fas fa-eye"></i> View Phases
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            $('#newDataTableBody').html(html);
+        })
+        .fail(function() {
+            $('#newDataTableBody').html('<tr><td colspan="4" class="text-center text-danger">Failed to load species data</td></tr>');
+        });
+}
+
+function viewSpeciesPhases(speciesName) {
+    $('#speciesNameTitle').text(speciesName);
+    $('#speciesPhasesModal').modal('show');
+    
+    // Load phases data
+    $.get('/api/pheno-new/species-phases/' + encodeURIComponent(speciesName))
+        .done(function(data) {
+            // Display pheno_new phases
+            let newPhasesHtml = '';
+            if (data.pheno_new_phases.length > 0) {
+                newPhasesHtml = '<ul class="list-group">';
+                data.pheno_new_phases.forEach(function(phase) {
+                    newPhasesHtml += `
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${phase.phase_name_en || phase.phase_name_de || 'N/A'}</strong><br>
+                                    <small class="text-muted">
+                                        ${phase.start_date ? 'Start: ' + phase.start_date : ''}
+                                        ${phase.end_date ? ' End: ' + phase.end_date : ''}
+                                    </small>
+                                </div>
+                                <span class="badge bg-primary">${phase.observation_count}</span>
+                            </div>
+                        </li>
+                    `;
+                });
+                newPhasesHtml += '</ul>';
+            } else {
+                newPhasesHtml = '<p class="text-muted">No phases found in pheno_new database</p>';
+            }
+            $('#phenoNewPhasesContent').html(newPhasesHtml);
+            
+            // Display pheno phases
+            let phenoPhasesHtml = '';
+            if (data.pheno_phases.length > 0) {
+                phenoPhasesHtml = '<ul class="list-group">';
+                data.pheno_phases.forEach(function(phase) {
+                    phenoPhasesHtml += `
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${phase.phase_name_en || phase.phase_name_de}</strong><br>
+                                    <small class="text-muted">
+                                        Avg Day: ${Math.round(phase.avg_day_of_year)}
+                                    </small>
+                                </div>
+                                <span class="badge bg-success">${phase.observation_count}</span>
+                            </div>
+                        </li>
+                    `;
+                });
+                phenoPhasesHtml += '</ul>';
+                
+                if (data.pheno_species_matches.length > 0) {
+                    phenoPhasesHtml = '<div class="alert alert-info mb-2"><small>Matched as: ' + 
+                        data.pheno_species_matches.map(m => m.species_name_de || m.species_name_en || m.species_name_la).join(', ') +
+                        '</small></div>' + phenoPhasesHtml;
+                }
+            } else {
+                phenoPhasesHtml = '<p class="text-muted">No phases found in pheno database</p>';
+            }
+            $('#phenoPhasesContent').html(phenoPhasesHtml);
+            
+            // Store data and create charts
+            currentPhenoData = data;
+            createPhenologyCharts(data);
+        })
+        .fail(function() {
+            $('#phenoNewPhasesContent').html('<p class="text-danger">Failed to load phases</p>');
+            $('#phenoPhasesContent').html('<p class="text-danger">Failed to load phases</p>');
+        });
+}
+
+function createPhenologyCharts(data) {
+    // Debug: 查看返回的数据
+    console.log('Pheno New Time Series:', data.pheno_new_time_series);
+    console.log('Pheno Time Series:', data.pheno_time_series);
+    
+    // Get year ranges for each database separately
+    const phenoNewYears = [];
+    const phenoYears = [];
+    
+    if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
+        data.pheno_new_time_series.forEach(item => phenoNewYears.push(parseInt(item.year)));
+    }
+    if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+        data.pheno_time_series.forEach(item => phenoYears.push(parseInt(item.year)));
+    }
+    
+    // Set default values for pheno_new
+    if (phenoNewYears.length > 0) {
+        const minYear = Math.min(...phenoNewYears);
+        const maxYear = Math.max(...phenoNewYears);
+        $('#phenoNewStartYear').val(minYear);
+        $('#phenoNewEndYear').val(maxYear);
+        console.log('Pheno New Year Range:', minYear, '-', maxYear);
+    }
+    
+    // Set default values for pheno
+    if (phenoYears.length > 0) {
+        const minYear = Math.min(...phenoYears);
+        const maxYear = Math.max(...phenoYears);
+        $('#phenoStartYear').val(minYear);
+        $('#phenoEndYear').val(maxYear);
+    }
+    
+    // Create both charts with their own ranges
+    createPhenoNewChart(data);
+    createPhenoChart(data);
+}
+
+function createPhenoNewChart(data, startYear = null, endYear = null) {
+    const ctx = document.getElementById('phenoNewChart').getContext('2d');
+    
+    // If no range specified, use data's own range
+    if (!startYear || !endYear) {
+        const years = [];
+        if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
+            data.pheno_new_time_series.forEach(item => {
+                const year = parseFloat(item.year);
+                years.push(Math.floor(year));
+                // If fractional year (monthly data), include the next year
+                if (year % 1 !== 0) {
+                    years.push(Math.ceil(year));
+                }
+            });
+        }
+        if (years.length > 0) {
+            startYear = startYear || Math.min(...years);
+            endYear = endYear || Math.max(...years);
+        }
+    }
+    
+    // Process pheno_new time series data by phase
+    const phaseData = {};
+    if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
+        data.pheno_new_time_series.forEach(item => {
+            const year = parseFloat(item.year);
+            const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
+            
+            // Apply year filter
+            if (startYear && Math.floor(year) < startYear) return;
+            if (endYear && Math.floor(year) > endYear) return;
+            
+            if (!phaseData[phaseName]) {
+                phaseData[phaseName] = [];
+            }
+            
+            phaseData[phaseName].push({
+                x: year,
+                y: Math.round(item.avg_day_of_year)
+            });
+        });
+    }
+    
+    // Create datasets for each phase
+    const datasets = [];
+    const colors = [
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 99, 132, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(255, 159, 64, 1)',
+        'rgba(255, 206, 86, 1)'
+    ];
+    
+    let colorIndex = 0;
+    Object.entries(phaseData).forEach(([phaseName, points]) => {
+        datasets.push({
+            label: phaseName,
+            data: points.sort((a, b) => a.x - b.x),
+            borderColor: colors[colorIndex % colors.length],
+            backgroundColor: colors[colorIndex % colors.length].replace('1)', '0.2)'),
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            tension: 0.3
+        });
+        colorIndex++;
+    });
+    
+    // Destroy existing chart if any
+    if (phenoNewChartInstance) {
+        phenoNewChartInstance.destroy();
+    }
+    
+    // Create new chart
+    phenoNewChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Pheno New Database - Phenological Trends'
+                },
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const x = context.parsed.x;
+                            const year = Math.floor(x);
+                            const monthFraction = x - year;
+                            
+                            if (monthFraction > 0) {
+                                const monthIndex = Math.round(monthFraction * 12);
+                                return context.dataset.label + ': Day ' + context.parsed.y + ' (' + monthNames[monthIndex] + ' ' + year + ')';
+                            }
+                            return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + year + ')';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    },
+                    min: startYear,
+                    max: endYear,
+                    ticks: {
+                        stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
+                        callback: function(value) {
+                            return Math.round(value).toString();
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Day of Year'
+                    },
+                    min: 0,
+                    max: 365
+                }
+            }
+        }
+    });
+}
+
+function createPhenoChart(data, startYear = null, endYear = null) {
+    const ctx = document.getElementById('phenoChart').getContext('2d');
+    
+    // If no range specified, use data's own range
+    if (!startYear || !endYear) {
+        const years = [];
+        if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+            data.pheno_time_series.forEach(item => years.push(parseInt(item.year)));
+        }
+        if (years.length > 0) {
+            startYear = startYear || Math.min(...years);
+            endYear = endYear || Math.max(...years);
+        }
+    }
+    
+    // Process pheno time series data by phase
+    const phaseData = {};
+    if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+        data.pheno_time_series.forEach(item => {
+            const year = parseInt(item.year);
+            const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
+            
+            // Apply year filter
+            if (startYear && year < startYear) return;
+            if (endYear && year > endYear) return;
+            
+            if (!phaseData[phaseName]) {
+                phaseData[phaseName] = [];
+            }
+            phaseData[phaseName].push({
+                x: year,
+                y: Math.round(item.avg_day_of_year)
+            });
+        });
+    }
+    
+    // Create datasets for each phase
+    const datasets = [];
+    const colors = [
+        'rgba(75, 192, 192, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(255, 159, 64, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(231, 76, 60, 1)'
+    ];
+    
+    let colorIndex = 0;
+    Object.entries(phaseData).forEach(([phaseName, points]) => {
+        datasets.push({
+            label: phaseName,
+            data: points.sort((a, b) => a.x - b.x),
+            borderColor: colors[colorIndex % colors.length],
+            backgroundColor: colors[colorIndex % colors.length].replace('1)', '0.2)'),
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            tension: 0.3
+        });
+        colorIndex++;
+    });
+    
+    // Destroy existing chart if any
+    if (phenoChartInstance) {
+        phenoChartInstance.destroy();
+    }
+    
+    // Create new chart
+    phenoChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Pheno Database - Phenological Trends'
+                },
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + context.parsed.x + ')';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    },
+                    min: startYear,
+                    max: endYear,
+                    ticks: {
+                        stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
+                        callback: function(value) {
+                            return Math.round(value).toString();
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Day of Year'
+                    },
+                    min: 0,
+                    max: 365
+                }
+            }
+        }
+    });
+}
+
+function updatePhenoNewChart() {
+    if (!currentPhenoData) return;
+    
+    const startYear = parseInt($('#phenoNewStartYear').val()) || null;
+    const endYear = parseInt($('#phenoNewEndYear').val()) || null;
+    
+    createPhenoNewChart(currentPhenoData, startYear, endYear);
+}
+
+function updatePhenoChart() {
+    if (!currentPhenoData) return;
+    
+    const startYear = parseInt($('#phenoStartYear').val()) || null;
+    const endYear = parseInt($('#phenoEndYear').val()) || null;
+    
+    createPhenoChart(currentPhenoData, startYear, endYear);
 }
 </script>
 {% endblock %}

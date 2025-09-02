@@ -14,10 +14,28 @@ DB_CONFIG = {
     'port': '5432'
 }
 
+# pheno_new数据库配置
+DB_CONFIG_NEW = {
+    'host': 'localhost',
+    'database': 'pheno_new',
+    'user': 'postgres',
+    'password': '',
+    'port': '5432'
+}
+
 def get_db_connection():
     """获取数据库连接"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        return None
+
+def get_db_connection_new():
+    """获取pheno_new数据库连接"""
+    try:
+        conn = psycopg2.connect(**DB_CONFIG_NEW)
         return conn
     except Exception as e:
         print(f"Database connection error: {e}")
@@ -427,6 +445,205 @@ def api_species_phases(species_id):
         conn.close()
         
         return jsonify(phases)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pheno-new/species')
+def api_pheno_new_species():
+    """获取pheno_new数据库中的物种数据，并标记在pheno数据库中是否存在"""
+    conn_new = get_db_connection_new()
+    conn = get_db_connection()
+    if not conn_new or not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor_new = conn_new.cursor()
+        cursor = conn.cursor()
+        
+        # 获取pheno_new中的所有物种
+        cursor_new.execute("""
+            SELECT 
+                s.id as species_id,
+                s.species_name_en,
+                s.species_name_la,
+                s.species_name_de,
+                COUNT(o.id) as observation_count
+            FROM dwd_species s
+            LEFT JOIN dwd_observation o ON s.id = o.species_id
+            GROUP BY s.id, s.species_name_en, s.species_name_la, s.species_name_de
+            ORDER BY s.species_name_en
+        """)
+        
+        new_species = dict_fetchall(cursor_new)
+        
+        # 获取pheno数据库中的所有物种名称
+        cursor.execute("""
+            SELECT DISTINCT species_name_de FROM dwd_species
+            UNION
+            SELECT DISTINCT species_name_en FROM dwd_species
+            UNION 
+            SELECT DISTINCT species_name_la FROM dwd_species
+        """)
+        
+        existing_species_names = set(row[0] for row in cursor.fetchall() if row[0])
+        
+        # 标记每个物种是否在pheno数据库中存在
+        for species in new_species:
+            # 检查任何一个名称是否在pheno数据库中存在
+            species['exists_in_pheno'] = (
+                species['species_name_en'] in existing_species_names or
+                species['species_name_la'] in existing_species_names or
+                species['species_name_de'] in existing_species_names
+            )
+            # 选择一个非空的名称作为显示名称
+            species['species_name'] = (
+                species['species_name_en'] or 
+                species['species_name_la'] or 
+                species['species_name_de'] or 
+                'Unknown'
+            )
+        
+        cursor_new.close()
+        cursor.close()
+        conn_new.close()
+        conn.close()
+        
+        return jsonify(new_species)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pheno-new/species-phases/<species_name>')
+def api_pheno_new_species_phases(species_name):
+    """获取pheno_new中特定物种的物候期数据，并与pheno数据库中的数据对比"""
+    conn_new = get_db_connection_new()
+    conn = get_db_connection()
+    if not conn_new or not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor_new = conn_new.cursor()
+        cursor = conn.cursor()
+        
+        # 获取pheno_new中该物种的物候期数据
+        cursor_new.execute("""
+            SELECT DISTINCT
+                p.id as phase_id,
+                p.phase_name_en,
+                p.phase_name_de,
+                COUNT(o.id) as observation_count,
+                MIN(o.date) as start_date,
+                MAX(o.date) as end_date
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
+            GROUP BY p.id, p.phase_name_en, p.phase_name_de
+            ORDER BY p.phase_name_en
+        """, (species_name, species_name, species_name))
+        
+        new_phases = dict_fetchall(cursor_new)
+        
+        # 获取pheno_new中的时间序列数据 - 简化版本，总是按月份显示1856年数据
+        cursor_new.execute("""
+            SELECT 
+                p.phase_name_en,
+                p.phase_name_de,
+                CAST(o.reference_year AS INTEGER) + (EXTRACT(MONTH FROM o.date::date) - 1) / 12.0 as year,
+                AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
+                AND o.date IS NOT NULL
+            GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year, EXTRACT(MONTH FROM o.date::date)
+            ORDER BY p.phase_name_en, year
+        """, (species_name, species_name, species_name))
+        
+        new_phases = dict_fetchall(cursor_new)
+        
+        # 重新执行查询获取时间序列数据
+        cursor_new.execute("""
+            SELECT 
+                p.phase_name_en,
+                p.phase_name_de,
+                CAST(o.reference_year AS INTEGER) as year,
+                AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
+                AND o.day_of_year IS NOT NULL AND o.day_of_year <> ''
+            GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year
+            ORDER BY p.phase_name_en, year
+        """, (species_name, species_name, species_name))
+        
+        new_time_series = dict_fetchall(cursor_new)
+        
+        # 查找该物种在pheno数据库中的对应ID（可能有多个匹配）
+        cursor.execute("""
+            SELECT id, species_name_de, species_name_en, species_name_la 
+            FROM dwd_species 
+            WHERE species_name_de = %s OR species_name_en = %s OR species_name_la = %s
+        """, (species_name, species_name, species_name))
+        
+        pheno_species_matches = dict_fetchall(cursor)
+        
+        pheno_phases = []
+        pheno_time_series = []
+        if pheno_species_matches:
+            # 获取pheno数据库中的物候期数据
+            species_ids = [s['id'] for s in pheno_species_matches]
+            placeholders = ','.join(['%s'] * len(species_ids))
+            cursor.execute(f"""
+                SELECT DISTINCT
+                    p.id as phase_id,
+                    p.phase_name_de,
+                    p.phase_name_en,
+                    COUNT(o.id) as observation_count,
+                    AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year
+                FROM dwd_observation o
+                JOIN dwd_phase p ON o.phase_id = p.id
+                WHERE o.species_id IN ({placeholders})
+                GROUP BY p.id, p.phase_name_de, p.phase_name_en
+                ORDER BY p.phase_name_de
+            """, species_ids)
+            
+            pheno_phases = dict_fetchall(cursor)
+            
+            # 获取pheno数据库的时间序列数据
+            cursor.execute(f"""
+                SELECT 
+                    p.phase_name_en,
+                    p.phase_name_de,
+                    o.reference_year as year,
+                    AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
+                    COUNT(o.id) as observation_count
+                FROM dwd_observation o
+                JOIN dwd_phase p ON o.phase_id = p.id
+                WHERE o.species_id IN ({placeholders})
+                    AND o.day_of_year IS NOT NULL
+                GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year
+                ORDER BY p.phase_name_en, o.reference_year
+            """, species_ids)
+            
+            pheno_time_series = dict_fetchall(cursor)
+        
+        cursor_new.close()
+        cursor.close()
+        conn_new.close()
+        conn.close()
+        
+        return jsonify({
+            'pheno_new_phases': new_phases,
+            'pheno_new_time_series': new_time_series,
+            'pheno_phases': pheno_phases,
+            'pheno_time_series': pheno_time_series,
+            'pheno_species_matches': pheno_species_matches
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
