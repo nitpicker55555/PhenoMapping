@@ -545,7 +545,7 @@ def api_pheno_new_species_phases(species_name):
         
         new_phases = dict_fetchall(cursor_new)
         
-        # 获取pheno_new中的时间序列数据 - 简化版本，总是按月份显示1856年数据
+        # 获取pheno_new中的时间序列数据 - 按月份显示1856年数据
         cursor_new.execute("""
             SELECT 
                 p.phase_name_en,
@@ -559,25 +559,6 @@ def api_pheno_new_species_phases(species_name):
             WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
                 AND o.date IS NOT NULL
             GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year, EXTRACT(MONTH FROM o.date::date)
-            ORDER BY p.phase_name_en, year
-        """, (species_name, species_name, species_name))
-        
-        new_phases = dict_fetchall(cursor_new)
-        
-        # 重新执行查询获取时间序列数据
-        cursor_new.execute("""
-            SELECT 
-                p.phase_name_en,
-                p.phase_name_de,
-                CAST(o.reference_year AS INTEGER) as year,
-                AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
-                COUNT(o.id) as observation_count
-            FROM dwd_observation o
-            JOIN dwd_species s ON o.species_id = s.id
-            JOIN dwd_phase p ON o.phase_id = p.id
-            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
-                AND o.day_of_year IS NOT NULL AND o.day_of_year <> ''
-            GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year
             ORDER BY p.phase_name_en, year
         """, (species_name, species_name, species_name))
         
