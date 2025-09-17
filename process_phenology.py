@@ -2,7 +2,7 @@
 """
 Simple wrapper to process phenology data
 Usage: python3 process_phenology.py [input_directory]
-If no directory is provided, defaults to /Users/puzhen/Downloads/Transskriptionen
+If no directory is provided, defaults to ./Transskriptionen
 """
 
 import subprocess

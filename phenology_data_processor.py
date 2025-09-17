@@ -101,36 +101,84 @@ def extract_date_from_folder_name(folder_path):
     return None
 
 def extract_location_from_folder_name(folder_path):
-    """Extract location name from folder path"""
+    """Extract location name from folder path using simplified method"""
     folder_name = os.path.basename(folder_path)
     
-    # Try to extract location from different patterns
-    patterns = [
-        # Pattern 1: "number Type - Date Location - Person" (e.g., "18 Tabelle - Sulzbach 05.12.1856 - Sieger")
-        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s+\d+\.\d+\.\d+\s*-',
-        # Pattern 2: "number Type - Date FR Location - Person" (e.g., "12 Tabelle - 10.12.2856 FR Kastl - Wresner")
-        r'^\d+\s+\w+\s*-\s*\d+\.\d+\.\d+\s+(?:FR\s+)?([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-',
-        # Pattern 3: "number - Date Location - Person" (e.g., "43 - 1856 Allersberg - Taeger")
-        r'^\d+\s*-\s*\d{4}\s+([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-',
-        # Pattern 4: "number Type - Location - Person" (without date)
-        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-\s*\w+',
-        # Pattern 5: For cases like "6 Tabelle - Freihöls 25.22.1856 - Gigglberger"
-        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+)\s+\d+\.\d+\.\d+\s*-',
-        # Pattern 6: "number Type - Bemerkungen - Person" (special case for remarks)
-        r'^\d+\s+\w+\s*-\s*(Bemerkungen)\s*-',
-        # Pattern 7: "number Type - Year Location - Person" (e.g., "57 Tabelle - 1856 Berg - Boesner")
-        r'^\d+\s+\w+\s*-\s*\d{4}\s+([A-Za-zäöüÄÖÜß]+)\s*-',
-    ]
+    # First check for special cases
+    if 'unbestimmt' in folder_name.lower():
+        return 'Unknown'
     
-    for pattern in patterns:
-        match = re.search(pattern, folder_name)
-        if match:
-            location = match.group(1).strip()
-            # Clean up location name
-            location = location.replace('FR ', '')  # Remove FR prefix if present
-            return location
+    # Check for patterns indicating no location
+    # Pattern 1: "number Tabelle - - person"
+    if re.match(r'^\d+\s+Tabelle\s*-\s*-\s*\w+', folder_name):
+        return 'Unknown'
+    # Pattern 2: "number Tabelle - date - person" (no location)
+    if re.match(r'^\d+\s+Tabelle\s*-\s*\d+\.\d+\.\d+\s*-\s*\w+', folder_name):
+        return 'Unknown'
+    # Pattern 3: "number Tabelle - year - person"  
+    if re.match(r'^\d+\s+Tabelle\s*-\s*\d{4}\s*-\s*\w+$', folder_name):
+        return 'Unknown'
     
-    return None
+    # Remove file extensions if present
+    folder_name = re.sub(r'\.(odt|csv|pdf)$', '', folder_name, flags=re.IGNORECASE)
+    
+    # Remove 'Tabelle' (case-insensitive)
+    cleaned = re.sub(r'\bTabelle\b', '', folder_name, flags=re.IGNORECASE)
+    
+    # Remove leading numbers and following spaces/dashes
+    cleaned = re.sub(r'^\d+\s*[-\s]*', '', cleaned)
+    
+    # Remove dates (patterns like 12.11.1856, 1856, etc.)
+    cleaned = re.sub(r'\d{1,2}\.\d{1,2}\.\d{4}', '', cleaned)
+    cleaned = re.sub(r'\b\d{4}\b', '', cleaned)
+    
+    # Split by dash to separate location from person name
+    # Pattern: "location - person" or "- location - person" or "date location - person"
+    parts = cleaned.split('-')
+    
+    if len(parts) >= 2:
+        # Try to find the location part (usually before the last dash)
+        for i, part in enumerate(parts[:-1]):
+            part = part.strip()
+            # Skip empty parts
+            if not part:
+                continue
+            # Skip if it's just a date remainder
+            if re.match(r'^\s*\.?\s*$', part):
+                continue
+            # Check if this looks like a location (starts with capital letter, not too long)
+            # Special words that are known locations or descriptors
+            location_words = ['Bemerkungen', 'Freihöls', 'Freudenberg', 'Sulzbach', 
+                            'Taubenbach', 'Kastl', 'Wernberg', 'Berg', 'Richtheim',
+                            'Hilpoltstein', 'Allersberg']
+            words_in_part = part.split()
+            if words_in_part and (words_in_part[0] in location_words or 
+                                (words_in_part[0][0].isupper() and len(words_in_part) <= 2)):
+                # Remove FR prefix if present
+                location = re.sub(r'^FR\s+', '', part)
+                return location.strip()
+    
+    # If no pattern matched, try to extract first capitalized word(s)
+    words = cleaned.split()
+    location_words = []
+    for word in words:
+        word = word.strip()
+        if word and word[0].isupper() and len(word) > 1:
+            # Remove FR prefix
+            if word == 'FR' and location_words:
+                continue
+            location_words.append(word)
+            # Stop after getting 1-2 location words
+            if len(location_words) >= 2:
+                break
+        # Stop if we hit a lowercase word or a surname pattern
+        elif location_words:
+            break
+    
+    if location_words:
+        return ' '.join(location_words)
+    
+    return 'Unknown'
 
 def find_odt_files_in_tabelle_folders(base_dir):
     """Find all ODT files in folders containing 'Tabelle' in their name"""
@@ -277,11 +325,13 @@ def merge_16column_tables(csv_dir, output_file, folder_date_mapping=None, folder
             
             # Get date and location for this index
             date = ""
-            location = ""
+            location = "Unknown"  # Default to Unknown
             if folder_date_mapping and table_info['index'] in folder_date_mapping:
                 date = folder_date_mapping[table_info['index']]
             if folder_location_mapping and table_info['index'] in folder_location_mapping:
                 location = folder_location_mapping[table_info['index']]
+                if not location:  # Handle None or empty string
+                    location = "Unknown"
             
             with open(table_info['filepath'], 'r', encoding='utf-8') as infile:
                 reader = csv.reader(infile)
@@ -304,7 +354,9 @@ def main():
     if len(sys.argv) > 1:
         base_dir = sys.argv[1]
     else:
-        base_dir = "/Users/puzhen/Downloads/Transskriptionen"
+        # Use relative path to Transskriptionen folder
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.join(script_dir, "Transskriptionen")
     
     # Validate input directory
     if not os.path.exists(base_dir):

@@ -691,7 +691,7 @@ def api_pheno_new_locations():
         return jsonify({'error': str(e)}), 500
 
 # Transcription Editor API endpoints
-TRANSCRIPTION_BASE_PATH = '/Users/puzhen/Downloads/Transskriptionen'
+TRANSCRIPTION_BASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Transskriptionen')
 
 @app.route('/api/transcription/folders')
 def api_transcription_folders():
@@ -845,8 +845,10 @@ def api_transcription_merge():
     """Run data merge process"""
     try:
         # Run the phenology data processor
+        # Use relative path for script
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'phenology_data_processor.py')
         result = subprocess.run(
-            ['python3', '/Users/puzhen/Desktop/pheno/PhenoMapping/phenology_data_processor.py'],
+            ['python3', script_path],
             capture_output=True,
             text=True
         )
@@ -860,8 +862,9 @@ def api_transcription_merge():
         
         if import_to_db:
             # Run import script
+            import_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'import_to_pheno_new.py')
             import_result = subprocess.run(
-                ['python3', '/Users/puzhen/Desktop/pheno/PhenoMapping/import_to_pheno_new.py'],
+                ['python3', import_script_path],
                 capture_output=True,
                 text=True
             )
