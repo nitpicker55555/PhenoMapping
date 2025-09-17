@@ -9,9 +9,10 @@ import sys
 import re
 import csv
 from pathlib import Path
-from odf import text, teletype
 from odf.opendocument import load
 from odf.table import Table, TableColumn, TableRow, TableCell
+from odf.text import P
+from odf import teletype
 
 def extract_tables_from_odt(odt_file_path):
     """Extract all tables from an ODT file"""

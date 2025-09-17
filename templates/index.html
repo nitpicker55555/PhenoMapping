@@ -457,28 +457,55 @@ function loadYearlyTrend() {
 function loadNewDataSpecies() {
     $.get('/api/pheno-new/species')
         .done(function(species) {
+            // Sort by observation count descending
+            species.sort((a, b) => b.observation_count - a.observation_count);
+            
+            // Separate existing and new species
+            const existingSpecies = species.filter(item => item.exists_in_pheno);
+            const newSpecies = species.filter(item => !item.exists_in_pheno);
+            
             let html = '';
-            species.forEach(function(item) {
-                const statusBadge = item.exists_in_pheno 
-                    ? '<span class="badge bg-success">Existing</span>' 
-                    : '<span class="badge bg-warning">New</span>';
-                
-                const rowClass = item.exists_in_pheno ? '' : 'table-warning';
-                
-                html += `
-                    <tr class="${rowClass}">
-                        <td>${item.species_name}</td>
-                        <td>${item.locations || 'N/A'}</td>
-                        <td>${item.observation_count.toLocaleString()}</td>
-                        <td>${statusBadge}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="viewSpeciesPhases('${item.species_name}')">
-                                <i class="fas fa-eye"></i> View Phases
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
+            
+            // First show existing species
+            if (existingSpecies.length > 0) {
+                html += '<tr class="table-secondary"><td colspan="5"><strong>Species Existing in Pheno Database</strong></td></tr>';
+                existingSpecies.forEach(function(item) {
+                    html += `
+                        <tr>
+                            <td>${item.species_name}</td>
+                            <td>${item.locations || 'Unknown'}</td>
+                            <td>${item.observation_count.toLocaleString()}</td>
+                            <td><span class="badge bg-success">Existing</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewSpeciesPhases('${item.species_name}')">
+                                    <i class="fas fa-eye"></i> View Phases
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            // Then show new species
+            if (newSpecies.length > 0) {
+                html += '<tr class="table-secondary"><td colspan="5"><strong>New Species Not in Pheno Database</strong></td></tr>';
+                newSpecies.forEach(function(item) {
+                    html += `
+                        <tr class="table-warning">
+                            <td>${item.species_name}</td>
+                            <td>${item.locations || 'Unknown'}</td>
+                            <td>${item.observation_count.toLocaleString()}</td>
+                            <td><span class="badge bg-warning">New</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewSpeciesPhases('${item.species_name}')">
+                                    <i class="fas fa-eye"></i> View Phases
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
             $('#newDataTableBody').html(html);
         })
         .fail(function() {

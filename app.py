@@ -22,7 +22,7 @@ DB_CONFIG = {
     'host': 'localhost',
     'database': 'pheno',
     'user': 'postgres',
-    'password': '',
+    'password': '9417941',
     'port': '5432'
 }
 
@@ -31,7 +31,7 @@ DB_CONFIG_NEW = {
     'host': 'localhost',
     'database': 'pheno_new',
     'user': 'postgres',
-    'password': '',
+    'password': '9417941',
     'port': '5432'
 }
 
@@ -491,7 +491,7 @@ def api_pheno_new_species():
             LEFT JOIN dwd_observation o ON s.id = o.species_id
             LEFT JOIN dwd_station st ON o.station_id = st.id
             GROUP BY s.id, s.species_name_en, s.species_name_la, s.species_name_de
-            ORDER BY s.species_name_en
+            ORDER BY COUNT(DISTINCT o.id) DESC
         """)
         
         new_species = dict_fetchall(cursor_new)
@@ -522,6 +522,9 @@ def api_pheno_new_species():
                 species['species_name_de'] or 
                 'Unknown'
             )
+            # 标准化locations显示 - 将N/A改为Unknown
+            if not species['locations'] or species['locations'] == 'N/A':
+                species['locations'] = 'Unknown'
         
         cursor_new.close()
         cursor.close()
