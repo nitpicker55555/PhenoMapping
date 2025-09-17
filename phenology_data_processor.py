@@ -100,6 +100,38 @@ def extract_date_from_folder_name(folder_path):
     
     return None
 
+def extract_location_from_folder_name(folder_path):
+    """Extract location name from folder path"""
+    folder_name = os.path.basename(folder_path)
+    
+    # Try to extract location from different patterns
+    patterns = [
+        # Pattern 1: "number Type - Date Location - Person" (e.g., "18 Tabelle - Sulzbach 05.12.1856 - Sieger")
+        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s+\d+\.\d+\.\d+\s*-',
+        # Pattern 2: "number Type - Date FR Location - Person" (e.g., "12 Tabelle - 10.12.2856 FR Kastl - Wresner")
+        r'^\d+\s+\w+\s*-\s*\d+\.\d+\.\d+\s+(?:FR\s+)?([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-',
+        # Pattern 3: "number - Date Location - Person" (e.g., "43 - 1856 Allersberg - Taeger")
+        r'^\d+\s*-\s*\d{4}\s+([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-',
+        # Pattern 4: "number Type - Location - Person" (without date)
+        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+(?:\s+[A-Za-zäöüÄÖÜß]+)*?)\s*-\s*\w+',
+        # Pattern 5: For cases like "6 Tabelle - Freihöls 25.22.1856 - Gigglberger"
+        r'^\d+\s+\w+\s*-\s*([A-Za-zäöüÄÖÜß]+)\s+\d+\.\d+\.\d+\s*-',
+        # Pattern 6: "number Type - Bemerkungen - Person" (special case for remarks)
+        r'^\d+\s+\w+\s*-\s*(Bemerkungen)\s*-',
+        # Pattern 7: "number Type - Year Location - Person" (e.g., "57 Tabelle - 1856 Berg - Boesner")
+        r'^\d+\s+\w+\s*-\s*\d{4}\s+([A-Za-zäöüÄÖÜß]+)\s*-',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, folder_name)
+        if match:
+            location = match.group(1).strip()
+            # Clean up location name
+            location = location.replace('FR ', '')  # Remove FR prefix if present
+            return location
+    
+    return None
+
 def find_odt_files_in_tabelle_folders(base_dir):
     """Find all ODT files in folders containing 'Tabelle' in their name"""
     odt_files = []
@@ -127,8 +159,9 @@ def process_odt_files(base_dir, output_dir):
     odt_files = find_odt_files_in_tabelle_folders(base_dir)
     print(f"Found {len(odt_files)} ODT files to process\n")
     
-    # Create a mapping of folder index to date
+    # Create mappings for folder metadata
     folder_date_mapping = {}
+    folder_location_mapping = {}
     
     # Process each ODT file
     for odt_file in odt_files:
@@ -138,10 +171,15 @@ def process_odt_files(base_dir, output_dir):
         folder_path = os.path.dirname(odt_file)
         folder_index = extract_folder_index(odt_file)
         folder_date = extract_date_from_folder_name(folder_path)
+        folder_location = extract_location_from_folder_name(folder_path)
         
-        if folder_index and folder_date:
-            folder_date_mapping[folder_index] = folder_date
-            print(f"  Folder {folder_index}: Date = {folder_date}")
+        if folder_index:
+            if folder_date:
+                folder_date_mapping[folder_index] = folder_date
+                print(f"  Folder {folder_index}: Date = {folder_date}")
+            if folder_location:
+                folder_location_mapping[folder_index] = folder_location
+                print(f"  Folder {folder_index}: Location = {folder_location}")
         
         # Extract tables
         tables = extract_tables_from_odt(odt_file)
@@ -173,8 +211,8 @@ def process_odt_files(base_dir, output_dir):
             else:
                 print(f"  Failed to save table {i+1}")
     
-    # Save the date mapping for later use
-    return folder_date_mapping
+    # Return both mappings for later use
+    return folder_date_mapping, folder_location_mapping
 
 def extract_index_from_filename(filename):
     """Extract the index number from the beginning of the filename"""
@@ -183,8 +221,8 @@ def extract_index_from_filename(filename):
         return match.group(1)
     return None
 
-def merge_16column_tables(csv_dir, output_file, folder_date_mapping=None):
-    """Merge all 16-column tables into a single CSV file with date information"""
+def merge_16column_tables(csv_dir, output_file, folder_date_mapping=None, folder_location_mapping=None):
+    """Merge all 16-column tables into a single CSV file with date and location information"""
     # Headers from the standard phenology observation table
     first_row_headers = ["Name der Gewächse", "Blätter", "Blüthen", "Früchte", "Genaue Bezeichnung der Standorte"]
     second_row_headers = [
@@ -204,8 +242,8 @@ def merge_16column_tables(csv_dir, output_file, folder_date_mapping=None):
         "Sämtliche Früchte sind abgefallen."
     ]
     
-    # Construct final headers with date column
-    final_headers = ["Index", "Date", first_row_headers[0]] + second_row_headers + [first_row_headers[4]]
+    # Construct final headers with date and location columns
+    final_headers = ["Index", "Date", "Location", first_row_headers[0]] + second_row_headers + [first_row_headers[4]]
     
     # Collect all 16-column tables
     tables_to_merge = []
@@ -237,17 +275,20 @@ def merge_16column_tables(csv_dir, output_file, folder_date_mapping=None):
         for table_info in tables_to_merge:
             print(f"Merging: {table_info['filename']}")
             
-            # Get date for this index
+            # Get date and location for this index
             date = ""
+            location = ""
             if folder_date_mapping and table_info['index'] in folder_date_mapping:
                 date = folder_date_mapping[table_info['index']]
+            if folder_location_mapping and table_info['index'] in folder_location_mapping:
+                location = folder_location_mapping[table_info['index']]
             
             with open(table_info['filepath'], 'r', encoding='utf-8') as infile:
                 reader = csv.reader(infile)
                 
                 for row in reader:
                     if row and len(row) == 16:
-                        new_row = [table_info['index'], date] + row
+                        new_row = [table_info['index'], date, location] + row
                         writer.writerow(new_row)
     
     print(f"\nMerged data saved to: {output_file}")
@@ -277,14 +318,14 @@ def main():
     csv_output_dir = os.path.join(script_dir, "extracted_tables_csv")
     os.makedirs(csv_output_dir, exist_ok=True)
     
-    # Step 1: Extract tables from ODT files and get date mapping
+    # Step 1: Extract tables from ODT files and get date and location mappings
     print("\n=== Step 1: Extracting tables from ODT files ===")
-    folder_date_mapping = process_odt_files(base_dir, csv_output_dir)
+    folder_date_mapping, folder_location_mapping = process_odt_files(base_dir, csv_output_dir)
     
-    # Step 2: Merge 16-column tables with date information
-    print("\n=== Step 2: Merging 16-column tables with date information ===")
+    # Step 2: Merge 16-column tables with date and location information
+    print("\n=== Step 2: Merging 16-column tables with date and location information ===")
     merged_output_file = os.path.join(script_dir, "merged_phenology_data.csv")
-    merge_16column_tables(csv_output_dir, merged_output_file, folder_date_mapping)
+    merge_16column_tables(csv_output_dir, merged_output_file, folder_date_mapping, folder_location_mapping)
     
     print("\n=== Processing complete! ===")
     print(f"Individual CSV files: {csv_output_dir}")

@@ -194,6 +194,7 @@
                         <thead>
                             <tr>
                                 <th>Species Name</th>
+                                <th>Locations</th>
                                 <th>Observations</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -201,7 +202,7 @@
                         </thead>
                         <tbody id="newDataTableBody">
                             <tr>
-                                <td colspan="4" class="text-center">
+                                <td colspan="5" class="text-center">
                                     <div class="spinner-border spinner-border-sm" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
@@ -467,6 +468,7 @@ function loadNewDataSpecies() {
                 html += `
                     <tr class="${rowClass}">
                         <td>${item.species_name}</td>
+                        <td>${item.locations || 'N/A'}</td>
                         <td>${item.observation_count.toLocaleString()}</td>
                         <td>${statusBadge}</td>
                         <td>
@@ -480,7 +482,7 @@ function loadNewDataSpecies() {
             $('#newDataTableBody').html(html);
         })
         .fail(function() {
-            $('#newDataTableBody').html('<tr><td colspan="4" class="text-center text-danger">Failed to load species data</td></tr>');
+            $('#newDataTableBody').html('<tr><td colspan="5" class="text-center text-danger">Failed to load species data</td></tr>');
         });
 }
 

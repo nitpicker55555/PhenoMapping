@@ -19,7 +19,7 @@ python3 process_phenology.py
 
 或者指定输入目录：
 ```bash
-python3 process_phenology.py /Users/puzhen/Downloads/Transskriptionen
+python3 process_phenology.py ``/Users/puzhen/Downloads/Transskriptionen``
 ```
 
 ### 方法2：直接运行主程序

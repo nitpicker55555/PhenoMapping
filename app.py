@@ -1,7 +1,19 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 import psycopg2
 import json
 from datetime import datetime, timedelta
+import os
+import re
+import subprocess
+from pathlib import Path
+from odf import text, teletype
+from odf.opendocument import load, OpenDocumentText
+from odf.table import Table, TableRow, TableCell
+import base64
+from PIL import Image
+import io
+from odt_editor import ODTEditor
+from geocoder import geocode_location
 
 app = Flask(__name__)
 
@@ -70,6 +82,11 @@ def species_page():
 def quality():
     """数据质量页面"""
     return render_template('quality.html')
+
+@app.route('/transcription-editor')
+def transcription_editor():
+    """Transcription file editor page"""
+    return render_template('transcription_editor.html')
 
 # API 端点
 @app.route('/api/overview')
@@ -461,16 +478,18 @@ def api_pheno_new_species():
         cursor_new = conn_new.cursor()
         cursor = conn.cursor()
         
-        # 获取pheno_new中的所有物种
+        # 获取pheno_new中的所有物种及其观测地点
         cursor_new.execute("""
             SELECT 
                 s.id as species_id,
                 s.species_name_en,
                 s.species_name_la,
                 s.species_name_de,
-                COUNT(o.id) as observation_count
+                COUNT(DISTINCT o.id) as observation_count,
+                STRING_AGG(DISTINCT st.station_name, ', ' ORDER BY st.station_name) as locations
             FROM dwd_species s
             LEFT JOIN dwd_observation o ON s.id = o.species_id
+            LEFT JOIN dwd_station st ON o.station_id = st.id
             GROUP BY s.id, s.species_name_en, s.species_name_la, s.species_name_de
             ORDER BY s.species_name_en
         """)
@@ -626,6 +645,245 @@ def api_pheno_new_species_phases(species_name):
             'pheno_species_matches': pheno_species_matches
         })
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pheno-new/locations')
+def api_pheno_new_locations():
+    """获取pheno_new数据库中的地理位置并转换为坐标"""
+    conn_new = get_db_connection_new()
+    if not conn_new:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor_new = conn_new.cursor()
+        
+        # Get unique locations and their observation counts from pheno_new
+        cursor_new.execute("""
+            SELECT 
+                st.station_name as location,
+                COUNT(DISTINCT o.id) as observation_count
+            FROM dwd_station st
+            INNER JOIN dwd_observation o ON st.id = o.station_id
+            WHERE st.area_group = 'Historical'
+            GROUP BY st.station_name
+            ORDER BY st.station_name
+        """)
+        
+        locations_data = dict_fetchall(cursor_new)
+        
+        # Geocode locations and filter out those without coordinates
+        geocoded_locations = []
+        for loc in locations_data:
+            location_name = loc['location']
+            if location_name and not location_name.startswith('Historical Station'):
+                geocoded = geocode_location(location_name)
+                if geocoded:
+                    geocoded['observations'] = loc['observation_count']
+                    geocoded_locations.append(geocoded)
+        
+        cursor_new.close()
+        conn_new.close()
+        
+        return jsonify(geocoded_locations)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Transcription Editor API endpoints
+TRANSCRIPTION_BASE_PATH = '/Users/puzhen/Downloads/Transskriptionen'
+
+@app.route('/api/transcription/folders')
+def api_transcription_folders():
+    """Get all folders list"""
+    try:
+        folders = []
+        base_path = Path(TRANSCRIPTION_BASE_PATH)
+        
+        for folder in sorted(base_path.iterdir()):
+            if folder.is_dir():
+                # Extract folder index
+                match = re.match(r'^(\d+)', folder.name)
+                index = match.group(1) if match else None
+                
+                # Check for files
+                has_odt = any(f.suffix == '.odt' for f in folder.iterdir() if f.is_file())
+                has_tif = any(f.suffix == '.tif' for f in folder.iterdir() if f.is_file())
+                is_tabelle = 'Tabelle' in folder.name
+                
+                folders.append({
+                    'name': folder.name,
+                    'index': index,
+                    'hasOdt': has_odt,
+                    'hasTif': has_tif,
+                    'isTabelle': is_tabelle
+                })
+        
+        return jsonify(folders)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcription/folder/<path:folder_name>')
+def api_transcription_folder_contents(folder_name):
+    """Get folder contents"""
+    try:
+        folder_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name
+        if not folder_path.exists():
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        files = []
+        for file in sorted(folder_path.iterdir()):
+            if file.is_file():
+                if file.suffix in ['.odt', '.tif']:
+                    files.append({
+                        'name': file.name,
+                        'type': file.suffix[1:]  # Remove the dot
+                    })
+        
+        return jsonify({'files': files})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcription/image/<path:folder_name>/<path:file_name>')
+def api_transcription_image(folder_name, file_name):
+    """Get TIF image"""
+    try:
+        file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Convert TIF to PNG for web display
+        img = Image.open(file_path)
+        img_io = io.BytesIO()
+        img.save(img_io, 'PNG')
+        img_io.seek(0)
+        
+        return send_file(img_io, mimetype='image/png')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcription/odt/<path:folder_name>/<path:file_name>')
+def api_transcription_odt(folder_name, file_name):
+    """Get ODT file content"""
+    try:
+        file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Extract tables from ODT
+        doc = load(str(file_path))
+        tables = []
+        raw_content = []
+        
+        # Extract all text
+        for p in doc.getElementsByType(text.P):
+            raw_content.append(teletype.extractText(p))
+        
+        # Extract tables
+        for table in doc.getElementsByType(Table):
+            table_data = []
+            for row in table.getElementsByType(TableRow):
+                row_data = []
+                for cell in row.getElementsByType(TableCell):
+                    cell_text = ""
+                    for p in cell.getElementsByType(text.P):
+                        cell_text += teletype.extractText(p)
+                    
+                    repeat = cell.getAttribute("numbercolumnsrepeated")
+                    if repeat:
+                        repeat_count = int(repeat)
+                    else:
+                        repeat_count = 1
+                    
+                    for _ in range(repeat_count):
+                        row_data.append(cell_text.strip())
+                
+                if row_data:
+                    table_data.append(row_data)
+            
+            if table_data:
+                tables.append(table_data)
+        
+        return jsonify({
+            'raw_content': '\n'.join(raw_content),
+            'tables': tables
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcription/save/<path:folder_name>/<path:file_name>', methods=['POST'])
+def api_transcription_save(folder_name, file_name):
+    """Save ODT file content"""
+    try:
+        file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+        
+        data = request.json
+        content = data.get('content', '')
+        table_data = data.get('tables', None)
+        
+        # Use ODTEditor to properly save the document
+        editor = ODTEditor(str(file_path))
+        editor.load()
+        
+        if table_data and len(table_data) > 0:
+            # Update tables if provided
+            for i, table in enumerate(table_data):
+                if i < len(editor.tables):
+                    editor.update_table_from_csv_data(i, table)
+        
+        # Save the document
+        editor.save()
+        
+        return jsonify({'success': True, 'message': 'File saved successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcription/merge', methods=['POST'])
+def api_transcription_merge():
+    """Run data merge process"""
+    try:
+        # Run the phenology data processor
+        result = subprocess.run(
+            ['python3', '/Users/puzhen/Desktop/pheno/PhenoMapping/phenology_data_processor.py'],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            return jsonify({'error': f'Merge process failed: {result.stderr}'}), 500
+        
+        # Check if user wants to import to database
+        import_to_db = request.json.get('import_to_db', False)
+        import_output = ""
+        
+        if import_to_db:
+            # Run import script
+            import_result = subprocess.run(
+                ['python3', '/Users/puzhen/Desktop/pheno/PhenoMapping/import_to_pheno_new.py'],
+                capture_output=True,
+                text=True
+            )
+            
+            if import_result.returncode != 0:
+                return jsonify({
+                    'success': True,
+                    'message': 'Data merged successfully but import failed',
+                    'merge_output': result.stdout,
+                    'import_error': import_result.stderr,
+                    'data_refreshed': False
+                })
+            
+            import_output = import_result.stdout
+            
+        return jsonify({
+            'success': True,
+            'message': 'Data merged and imported successfully' if import_to_db else 'Data merged successfully',
+            'merge_output': result.stdout,
+            'import_output': import_output,
+            'data_refreshed': import_to_db
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

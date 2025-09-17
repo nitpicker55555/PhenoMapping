@@ -50,6 +50,18 @@
                         </button>
                     </div>
                 </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-6">
+                        <button class="btn btn-info w-100" id="show-new-data-locations">
+                            <i class="fas fa-database me-2"></i>Show New Data Locations
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-secondary w-100" id="reset-view">
+                            <i class="fas fa-undo me-2"></i>Reset View
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -162,11 +174,19 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.custom-div-icon {
+    background-color: transparent !important;
+    border: none !important;
+}
+</style>
 <script>
 let mainMap;
 let allStations = [];
 let currentStations = [];
 let stationMarkers = L.layerGroup();
+let newDataMarkers = L.layerGroup();
+let showingNewData = false;
 
 $(document).ready(function() {
     initMainMap();
@@ -174,6 +194,20 @@ $(document).ready(function() {
     
     // Filter button event
     $('#apply-filters').click(applyFilters);
+    
+    // New data locations button
+    $('#show-new-data-locations').click(function() {
+        if (!showingNewData) {
+            loadNewDataLocations();
+        } else {
+            hideNewDataLocations();
+        }
+    });
+    
+    // Reset view button
+    $('#reset-view').click(function() {
+        resetMapView();
+    });
 });
 
 function initMainMap() {
@@ -203,8 +237,9 @@ function initMainMap() {
         }
     });
     
-    // Add marker layer group
+    // Add marker layer groups
     stationMarkers.addTo(mainMap);
+    newDataMarkers.addTo(mainMap);
 }
 
 function loadStationsData() {
@@ -509,6 +544,102 @@ function updateTable(stations) {
 
 function centerMapOnStation(lat, lng) {
     mainMap.setView([lat, lng], 12);
+}
+
+// New Data Location functions
+function loadNewDataLocations() {
+    $('#show-new-data-locations').html('<i class="fas fa-spinner fa-spin me-2"></i>Loading...');
+    
+    $.get('/api/pheno-new/locations')
+        .done(function(locations) {
+            displayNewDataLocations(locations);
+            showingNewData = true;
+            $('#show-new-data-locations').html('<i class="fas fa-eye-slash me-2"></i>Hide New Data Locations');
+            
+            // Update station info panel
+            $('#station-info').html(`
+                <div class="alert alert-info mb-0">
+                    <h6 class="alert-heading">New Data Locations</h6>
+                    <p class="mb-2">Showing ${locations.length} locations from historical phenology data (1856)</p>
+                    <ul class="mb-0" style="max-height: 300px; overflow-y: auto;">
+                        ${locations.map(loc => `<li>${loc.name} (${loc.observations} observations)</li>`).join('')}
+                    </ul>
+                </div>
+            `);
+        })
+        .fail(function() {
+            alert('Failed to load new data locations');
+            $('#show-new-data-locations').html('<i class="fas fa-database me-2"></i>Show New Data Locations');
+        });
+}
+
+function displayNewDataLocations(locations) {
+    // Clear existing new data markers
+    newDataMarkers.clearLayers();
+    
+    // Create bounds to fit all locations
+    const bounds = L.latLngBounds();
+    
+    locations.forEach(function(location) {
+        if (location.latitude && location.longitude) {
+            const marker = L.marker([location.latitude, location.longitude], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; white-space: nowrap;">${location.name}</div>`,
+                    iconSize: [80, 20],
+                    iconAnchor: [40, 10]
+                })
+            });
+            
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <h6 class="mb-2 text-info">New Data Location</h6>
+                    <p class="mb-1"><strong>Name:</strong> ${location.name}</p>
+                    <p class="mb-1"><strong>Coordinates:</strong> ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}</p>
+                    <p class="mb-1"><strong>Observations:</strong> ${location.observations}</p>
+                    <p class="mb-0"><strong>Source:</strong> Historical Data (1856)</p>
+                </div>
+            `);
+            
+            newDataMarkers.addLayer(marker);
+            bounds.extend([location.latitude, location.longitude]);
+        }
+    });
+    
+    // Fit map to show all new data locations
+    if (locations.some(loc => loc.latitude && loc.longitude)) {
+        mainMap.fitBounds(bounds, { padding: [50, 50] });
+    }
+}
+
+function hideNewDataLocations() {
+    newDataMarkers.clearLayers();
+    showingNewData = false;
+    $('#show-new-data-locations').html('<i class="fas fa-database me-2"></i>Show New Data Locations');
+    
+    // Reset station info
+    $('#station-info').html('<p class="text-muted text-center">Click on a station on the map to view details</p>');
+}
+
+function resetMapView() {
+    // Reset to default Germany view
+    mainMap.setView([51.1657, 10.4515], 6);
+    
+    // Clear filters
+    $('#state-filter').val('');
+    $('#altitude-filter').val('');
+    $('#observation-filter').val('');
+    
+    // Reset to all stations
+    currentStations = allStations;
+    displayStations(allStations);
+    updateCharts(allStations);
+    updateTable(allStations);
+    
+    // Hide new data if showing
+    if (showingNewData) {
+        hideNewDataLocations();
+    }
 }
 </script>
 {% endblock %}
