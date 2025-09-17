@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcription Editor - Phenology Mapping</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            background-color: white;
+            border-right: 1px solid #dee2e6;
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+        }
+        .folder-item {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        .folder-item:hover {
+            background-color: #e9ecef;
+        }
+        .folder-item.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        .content-area {
+            background-color: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .tif-preview {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #dee2e6;
+            margin-bottom: 1rem;
+        }
+        .odt-editor {
+            width: 100%;
+            min-height: 400px;
+            font-family: monospace;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 1rem;
+        }
+        .save-status {
+            display: inline-block;
+            margin-left: 1rem;
+            font-size: 0.875rem;
+        }
+        .save-status.success {
+            color: #28a745;
+        }
+        .save-status.error {
+            color: #dc3545;
+        }
+        .loading-spinner {
+            display: none;
+            margin-left: 1rem;
+        }
+        .table-preview {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+        .table-preview table {
+            font-size: 0.875rem;
+        }
+        .folder-info {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+        .file-tabs {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 1rem;
+        }
+        .file-tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .file-tab:hover {
+            background-color: #f8f9fa;
+        }
+        .file-tab.active {
+            border-bottom-color: #0d6efd;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-leaf"></i> Phenology Mapping
+            </a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/transcription-editor">Transcription Editor</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar with folder list -->
+            <div class="col-md-3 p-0">
+                <div class="sidebar">
+                    <div class="p-3 border-bottom">
+                        <h5 class="mb-0">Folder List</h5>
+                        <small class="text-muted">Total: <span id="folder-count">0</span> folders</small>
+                    </div>
+                    <div id="folder-list">
+                        <!-- Folders will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main content area -->
+            <div class="col-md-9">
+                <div class="content-area" id="welcome-message">
+                    <h4>Welcome to Transcription Editor</h4>
+                    <p>Please select a folder from the left sidebar to view and edit its contents.</p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Select folders containing "Tabelle" to edit phenological observation data tables.
+                    </div>
+                </div>
+
+                <div class="content-area" id="editor-area" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 id="current-folder-name">Folder Name</h4>
+                        <div>
+                            <button class="btn btn-primary" onclick="saveCurrentFile()">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-sync"></i> Merge Data
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="runMergeProcess(false)">Merge Only</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="runMergeProcess(true)">Merge and Import to Database</a></li>
+                                </ul>
+                            </div>
+                            <span class="save-status"></span>
+                            <div class="spinner-border spinner-border-sm loading-spinner" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="file-tabs" id="file-tabs">
+                        <!-- File tabs will be loaded here -->
+                    </div>
+
+                    <div id="tif-preview" style="display: none;">
+                        <h5>Scanned Image Preview</h5>
+                        <img id="tif-image" class="tif-preview" alt="TIF preview">
+                    </div>
+
+                    <div id="odt-editor-container" style="display: none;">
+                        <h5>ODT File Content</h5>
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-info-circle"></i> 
+                            You can edit data directly in the table below. Click on a cell to edit, then click "Save" when finished.
+                        </div>
+                        <div id="table-preview" class="table-preview">
+                            <!-- Table preview will be loaded here -->
+                        </div>
+                        <div class="mt-3">
+                            <label for="odt-content">Raw Text Content:</label>
+                            <textarea id="odt-content" class="odt-editor" readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let currentFolder = null;
+        let currentFile = null;
+        let folders = [];
+        let currentTables = [];
+
+        // Load folder list on page load
+        $(document).ready(function() {
+            loadFolders();
+        });
+
+        function loadFolders() {
+            $.get('/api/transcription/folders', function(data) {
+                // Sort folders by index (convert to number for proper sorting)
+                folders = data.sort((a, b) => {
+                    const indexA = parseInt(a.index) || 999999; // Put folders without index at the end
+                    const indexB = parseInt(b.index) || 999999;
+                    return indexA - indexB;
+                });
+                
+                $('#folder-count').text(folders.length);
+                
+                const folderList = $('#folder-list');
+                folderList.empty();
+                
+                folders.forEach(folder => {
+                    const folderItem = $(`
+                        <div class="folder-item" data-folder="${folder.name}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>${folder.name}</strong>
+                                    <div class="folder-info">
+                                        ${folder.hasOdt ? '<i class="fas fa-file-alt"></i> ODT' : ''}
+                                        ${folder.hasTif ? '<i class="fas fa-image"></i> TIF' : ''}
+                                        ${folder.isTabelle ? '<span class="badge bg-primary ms-1">Table</span>' : ''}
+                                    </div>
+                                </div>
+                                <small class="text-muted">#${folder.index || '-'}</small>
+                            </div>
+                        </div>
+                    `);
+                    
+                    folderItem.click(function() {
+                        selectFolder(folder.name);
+                    });
+                    
+                    folderList.append(folderItem);
+                });
+            });
+        }
+
+        function selectFolder(folderName) {
+            currentFolder = folderName;
+            
+            // Update UI
+            $('.folder-item').removeClass('active');
+            $(`.folder-item[data-folder="${folderName}"]`).addClass('active');
+            
+            $('#welcome-message').hide();
+            $('#editor-area').show();
+            $('#current-folder-name').text(folderName);
+            
+            // Clear previous content when switching folders
+            $('#table-preview').empty();
+            $('#odt-content').val('');
+            $('#tif-image').attr('src', '');
+            currentTables = [];
+            
+            // Load folder contents
+            loadFolderContents(folderName);
+        }
+
+        function loadFolderContents(folderName) {
+            $.get(`/api/transcription/folder/${encodeURIComponent(folderName)}`, function(data) {
+                // Create file tabs
+                const fileTabs = $('#file-tabs');
+                fileTabs.empty();
+                
+                data.files.forEach((file, index) => {
+                    const tab = $(`
+                        <button class="file-tab ${index === 0 ? 'active' : ''}" data-file="${file.name}">
+                            ${file.type === 'tif' ? '<i class="fas fa-image"></i>' : '<i class="fas fa-file-alt"></i>'}
+                            ${file.name}
+                        </button>
+                    `);
+                    
+                    tab.click(function() {
+                        showFile(file);
+                    });
+                    
+                    fileTabs.append(tab);
+                });
+                
+                // Show first file
+                if (data.files.length > 0) {
+                    showFile(data.files[0]);
+                }
+            });
+        }
+
+        function showFile(file) {
+            currentFile = file;
+            
+            // Update active tab
+            $('.file-tab').removeClass('active');
+            $(`.file-tab[data-file="${file.name}"]`).addClass('active');
+            
+            if (file.type === 'tif') {
+                $('#tif-preview').show();
+                $('#odt-editor-container').hide();
+                $('#tif-image').attr('src', `/api/transcription/image/${encodeURIComponent(currentFolder)}/${encodeURIComponent(file.name)}`);
+                
+                // Clear ODT content when showing TIF
+                $('#table-preview').empty();
+                $('#odt-content').val('');
+                currentTables = [];
+            } else if (file.type === 'odt') {
+                $('#tif-preview').hide();
+                $('#odt-editor-container').show();
+                loadOdtContent(file);
+            }
+        }
+
+        function loadOdtContent(file) {
+            $('.loading-spinner').show();
+            
+            $.get(`/api/transcription/odt/${encodeURIComponent(currentFolder)}/${encodeURIComponent(file.name)}`, function(data) {
+                $('.loading-spinner').hide();
+                
+                // Show raw content in textarea
+                $('#odt-content').val(data.raw_content);
+                
+                // Store tables for editing
+                currentTables = data.tables || [];
+                
+                // Clear table preview first
+                const tablePreview = $('#table-preview');
+                tablePreview.empty();
+                
+                // Show table preview if available
+                if (currentTables.length > 0) {
+                    currentTables.forEach((table, index) => {
+                        const tableHtml = createEditableTableHtml(table, index);
+                        tablePreview.append(tableHtml);
+                    });
+                } else {
+                    // Show a message when no tables are found
+                    tablePreview.html('<div class="alert alert-info">No tables found in this ODT file.</div>');
+                }
+            });
+        }
+
+        function createEditableTableHtml(tableData, index) {
+            let html = `<h6>Table ${index + 1}</h6>`;
+            html += `<table class="table table-bordered table-sm" data-table-index="${index}">`;
+            
+            tableData.forEach((row, rowIndex) => {
+                html += '<tr>';
+                row.forEach((cell, colIndex) => {
+                    const tag = rowIndex === 0 ? 'th' : 'td';
+                    html += `<${tag} contenteditable="true" 
+                            data-row="${rowIndex}" 
+                            data-col="${colIndex}"
+                            data-original="${escapeHtml(cell || '')}"
+                            onblur="updateTableCell(${index}, ${rowIndex}, ${colIndex}, this)"
+                            onfocus="selectAllText(this)">${cell || '-'}</${tag}>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</table>';
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function selectAllText(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        function updateTableCell(tableIndex, rowIndex, colIndex, element) {
+            const newValue = element.textContent;
+            const originalValue = element.getAttribute('data-original');
+            
+            // Update the data structure
+            if (currentTables[tableIndex]) {
+                currentTables[tableIndex][rowIndex][colIndex] = newValue;
+                
+                // Mark as changed if different from original
+                if (newValue !== originalValue) {
+                    $(element).css('background-color', '#fffacd');
+                } else {
+                    $(element).css('background-color', '');
+                }
+            }
+        }
+
+        function saveCurrentFile() {
+            if (!currentFile || currentFile.type !== 'odt') {
+                alert('Only ODT files can be edited');
+                return;
+            }
+            
+            const content = $('#odt-content').val();
+            $('.loading-spinner').show();
+            $('.save-status').removeClass('success error').text('');
+            
+            // Prepare data with tables
+            const saveData = {
+                content: content,
+                tables: currentTables
+            };
+            
+            $.ajax({
+                url: `/api/transcription/save/${encodeURIComponent(currentFolder)}/${encodeURIComponent(currentFile.name)}`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(saveData),
+                success: function(response) {
+                    $('.loading-spinner').hide();
+                    $('.save-status').addClass('success').text('Saved successfully!');
+                    
+                    // Reset background colors
+                    $('[contenteditable="true"]').css('background-color', '');
+                    
+                    // Update original values
+                    $('[contenteditable="true"]').each(function() {
+                        $(this).attr('data-original', $(this).text());
+                    });
+                    
+                    setTimeout(() => {
+                        $('.save-status').removeClass('success').text('');
+                    }, 3000);
+                },
+                error: function(error) {
+                    $('.loading-spinner').hide();
+                    $('.save-status').addClass('error').text('Save failed: ' + error.responseJSON.error);
+                }
+            });
+        }
+
+        function runMergeProcess(importToDb) {
+            const message = importToDb ? 
+                'Are you sure you want to re-run the data merge process and import to database? This may take several minutes.' :
+                'Are you sure you want to re-run the data merge process? This may take several minutes.';
+                
+            if (!confirm(message)) {
+                return;
+            }
+            
+            $('.loading-spinner').show();
+            $('.save-status').removeClass('success error').text('Processing...');
+            
+            $.ajax({
+                url: '/api/transcription/merge',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ import_to_db: importToDb }),
+                success: function(response) {
+                    $('.loading-spinner').hide();
+                    
+                    if (response.data_refreshed) {
+                        $('.save-status').addClass('success').text('Data merged and imported successfully!');
+                        alert('Data merged and imported successfully!\n\n' + 
+                              'Merge output:\n' + response.merge_output + '\n\n' +
+                              'Import output:\n' + response.import_output);
+                    } else {
+                        $('.save-status').addClass('success').text('Data merged successfully!');
+                        alert('Data merged successfully!\n\n' + response.merge_output);
+                    }
+                },
+                error: function(error) {
+                    $('.loading-spinner').hide();
+                    $('.save-status').addClass('error').text('Merge failed: ' + error.responseJSON.error);
+                    alert('Merge failed: ' + error.responseJSON.error);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

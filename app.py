@@ -370,7 +370,7 @@ def api_quality():
                 COUNT(o.id) as count
             FROM dwd_observation o
             JOIN dwd_quality_level ql ON o.quality_level_id = ql.id
-            WHERE o.reference_year >= '2000'
+            WHERE o.reference_year >= '1925' AND o.reference_year <= '2020'
             GROUP BY o.reference_year, ql.description
             ORDER BY o.reference_year, ql.description
         """)

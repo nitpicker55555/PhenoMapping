@@ -143,11 +143,11 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Year</th>
-                                <th>高Quality(%)</th>
-                                <th>中等Quality(%)</th>
-                                <th>基础Quality(%)</th>
-                                <th>总记录数</th>
-                                <th>Quality评分</th>
+                                <th>High Quality(%)</th>
+                                <th>Medium Quality(%)</th>
+                                <th>Basic Quality(%)</th>
+                                <th>Total Records</th>
+                                <th>Quality Score</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -266,10 +266,10 @@ function createQualityDistributionChart(qualityLevels) {
     const ctx = document.getElementById('quality-distribution-chart').getContext('2d');
     
     const labels = qualityLevels.map(level => {
-        if (level.id === '10') return '高Quality';
-        if (level.id === '7') return '中等Quality';
-        if (level.id === '1') return '基础Quality';
-        return `Quality等级 ${level.id}`;
+        if (level.id === '10') return 'High Quality';
+        if (level.id === '7') return 'Medium Quality';
+        if (level.id === '1') return 'Basic Quality';
+        return `Quality Level ${level.id}`;
     });
     
     const data = qualityLevels.map(level => parseInt(level.count) || 0);
@@ -319,20 +319,20 @@ function createQualityTrendChart(qualityByYear) {
         
         let qualityLevel = 'Other';
         if (item.description.includes('routinemäßige Korrektur beendet')) {
-            qualityLevel = '高Quality';
+            qualityLevel = 'High Quality';
         } else if (item.description.includes('geprüft, aber keine Korrekturen')) {
-            qualityLevel = '中等Quality';
+            qualityLevel = 'Medium Quality';
         } else if (item.description.includes('nur formale Prüfung')) {
-            qualityLevel = '基础Quality';
+            qualityLevel = 'Basic Quality';
         }
         
         yearData[year][qualityLevel] = parseInt(item.count) || 0;
     });
     
     const years = Object.keys(yearData).sort();
-    const highQuality = years.map(year => yearData[year]['高Quality'] || 0);
-    const mediumQuality = years.map(year => yearData[year]['中等Quality'] || 0);
-    const basicQuality = years.map(year => yearData[year]['基础Quality'] || 0);
+    const highQuality = years.map(year => yearData[year]['High Quality'] || 0);
+    const mediumQuality = years.map(year => yearData[year]['Medium Quality'] || 0);
+    const basicQuality = years.map(year => yearData[year]['Basic Quality'] || 0);
     
     new Chart(ctx, {
         type: 'line',
@@ -340,7 +340,7 @@ function createQualityTrendChart(qualityByYear) {
             labels: years,
             datasets: [
                 {
-                    label: '高Quality',
+                    label: 'High Quality',
                     data: highQuality,
                     borderColor: '#28a745',
                     backgroundColor: 'rgba(40, 167, 69, 0.1)',
@@ -348,7 +348,7 @@ function createQualityTrendChart(qualityByYear) {
                     tension: 0.4
                 },
                 {
-                    label: '中等Quality',
+                    label: 'Medium Quality',
                     data: mediumQuality,
                     borderColor: '#ffc107',
                     backgroundColor: 'rgba(255, 193, 7, 0.1)',
@@ -356,7 +356,7 @@ function createQualityTrendChart(qualityByYear) {
                     tension: 0.4
                 },
                 {
-                    label: '基础Quality',
+                    label: 'Basic Quality',
                     data: basicQuality,
                     borderColor: '#17a2b8',
                     backgroundColor: 'rgba(23, 162, 184, 0.1)',
@@ -407,11 +407,11 @@ function createDetailedQualityChart(qualityByYear) {
         
         const ctx = document.getElementById('quality-detailed-chart').getContext('2d');
         
-        // 处理数据 - 只显示2010years以后的数据
+        // Process data - show all data from 1925 onwards
         const yearData = {};
         qualityByYear.forEach(item => {
             const year = parseInt(item.reference_year);
-            if (year >= 2010) {
+            if (year >= 1925) {
                 if (!yearData[year]) {
                     yearData[year] = { high: 0, medium: 0, basic: 0 };
                 }
@@ -437,19 +437,19 @@ function createDetailedQualityChart(qualityByYear) {
                 labels: years,
                 datasets: [
                     {
-                        label: '高Quality',
+                        label: 'High Quality',
                         data: highData,
                         backgroundColor: '#28a745',
                         stack: 'quality'
                     },
                     {
-                        label: '中等Quality',
+                        label: 'Medium Quality',
                         data: mediumData,
                         backgroundColor: '#ffc107',
                         stack: 'quality'
                     },
                     {
-                        label: '基础Quality',
+                        label: 'Basic Quality',
                         data: basicData,
                         backgroundColor: '#17a2b8',
                         stack: 'quality'
@@ -492,7 +492,7 @@ function createDetailedQualityChart(qualityByYear) {
                                                 mediumData[context.dataIndex] + 
                                                 basicData[context.dataIndex];
                                 const percentage = ((context.parsed.y / yearTotal) * 100).toFixed(1);
-                                return `占该years ${percentage}%`;
+                                return `${percentage}% of this year`;
                             }
                         }
                     }
@@ -527,10 +527,10 @@ function updateQualityTable(qualityByYear) {
     const tbody = $('#quality-issues-table tbody');
     tbody.empty();
     
-    // 按Year排序（最新Year在前）
+    // Sort by year (newest first)
     const sortedYears = Object.keys(yearStats).sort((a, b) => b - a);
     
-    sortedYears.slice(0, 15).forEach(year => { // 只显示最近15years
+    sortedYears.slice(0, 20).forEach(year => { // Show recent 20 years
         const stats = yearStats[year];
         const total = stats.total;
         
@@ -540,7 +540,7 @@ function updateQualityTable(qualityByYear) {
         const mediumPct = ((stats.medium / total) * 100).toFixed(1);
         const basicPct = ((stats.basic / total) * 100).toFixed(1);
         
-        // 计算Quality评分 (高Quality=3分，中等=2分，基础=1分)
+        // Calculate quality score (High=3 points, Medium=2 points, Basic=1 point)
         const qualityScore = ((stats.high * 3 + stats.medium * 2 + stats.basic * 1) / total).toFixed(1);
         
         let scoreClass = 'text-success';
@@ -586,15 +586,15 @@ function generateQualityRecommendations(data) {
     
     if (parseFloat(highPct) >= 80) {
         recommendations += '<div class="mb-2"><i class="fas fa-check-circle text-success me-2"></i><strong>Excellent data quality</strong></div>';
-        recommendations += '<p class="small mb-0">High Quality Data占比达到 ' + highPct + '%，Data reliability is very high。</p>';
+        recommendations += '<p class="small mb-0">High quality data accounts for ' + highPct + '%, data reliability is very high.</p>';
     } else if (parseFloat(highPct) >= 60) {
         recommendations += '<div class="mb-2"><i class="fas fa-info-circle text-info me-2"></i><strong>Good data quality</strong></div>';
-        recommendations += '<p class="small mb-2">High Quality Data占比 ' + highPct + '%，Overall quality is good。</p>';
-        recommendations += '<p class="small mb-0 text-muted">Recommendation: Continue optimizing data processing workflows。</p>';
+        recommendations += '<p class="small mb-2">High quality data accounts for ' + highPct + '%, overall quality is good.</p>';
+        recommendations += '<p class="small mb-0 text-muted">Recommendation: Continue optimizing data processing workflows.</p>';
     } else {
         recommendations += '<div class="mb-2"><i class="fas fa-exclamation-triangle text-warning me-2"></i><strong>Needs attention</strong></div>';
-        recommendations += '<p class="small mb-2">High Quality Data占比仅 ' + highPct + '%。</p>';
-        recommendations += '<p class="small mb-0 text-muted">Recommendation: Strengthen data quality control and post-processing。</p>';
+        recommendations += '<p class="small mb-2">High quality data accounts for only ' + highPct + '%.</p>';
+        recommendations += '<p class="small mb-0 text-muted">Recommendation: Strengthen data quality control and post-processing.</p>';
     }
     
     recommendations += '</div>';
