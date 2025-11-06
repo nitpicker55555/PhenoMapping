@@ -16,6 +16,7 @@ from odt_editor import ODTEditor
 from geocoder import geocode_location
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
 
 # 数据库配置
 DB_CONFIG = {
@@ -87,6 +88,11 @@ def quality():
 def transcription_editor():
     """Transcription file editor page"""
     return render_template('transcription_editor.html')
+
+@app.route('/distribution')
+def distribution():
+    """数据分布页面"""
+    return render_template('distribution.html')
 
 # API 端点
 @app.route('/api/overview')
@@ -657,13 +663,13 @@ def api_pheno_new_locations():
     conn_new = get_db_connection_new()
     if not conn_new:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor_new = conn_new.cursor()
-        
+
         # Get unique locations and their observation counts from pheno_new
         cursor_new.execute("""
-            SELECT 
+            SELECT
                 st.station_name as location,
                 COUNT(DISTINCT o.id) as observation_count
             FROM dwd_station st
@@ -672,9 +678,9 @@ def api_pheno_new_locations():
             GROUP BY st.station_name
             ORDER BY st.station_name
         """)
-        
+
         locations_data = dict_fetchall(cursor_new)
-        
+
         # Geocode locations and filter out those without coordinates
         geocoded_locations = []
         for loc in locations_data:
@@ -684,12 +690,328 @@ def api_pheno_new_locations():
                 if geocoded:
                     geocoded['observations'] = loc['observation_count']
                     geocoded_locations.append(geocoded)
-        
+
         cursor_new.close()
         conn_new.close()
-        
+
         return jsonify(geocoded_locations)
-        
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/data-distribution')
+def api_data_distribution():
+    """获取数据时空分布统计 - 同时从pheno和pheno_new数据库"""
+    conn = get_db_connection()
+    conn_new = get_db_connection_new()
+
+    if not conn:
+        return jsonify({'error': 'Pheno database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        # ===== PHENO数据库数据 =====
+        # 获取年份-地区的观测数量分布（按1年）
+        cursor.execute("""
+            SELECT
+                CAST(reference_year AS INTEGER) as year,
+                s.state,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_station s ON o.station_id = s.id
+            WHERE s.state IS NOT NULL AND s.state != ''
+            GROUP BY CAST(reference_year AS INTEGER), s.state
+            ORDER BY year, state
+        """)
+
+        pheno_time_location_dist = dict_fetchall(cursor)
+
+        # 获取月份分布（day_of_year转换为月份）
+        cursor.execute("""
+            SELECT
+                CAST(reference_year AS INTEGER) as year,
+                CASE
+                    WHEN CAST(day_of_year AS INTEGER) <= 31 THEN 1
+                    WHEN CAST(day_of_year AS INTEGER) <= 59 THEN 2
+                    WHEN CAST(day_of_year AS INTEGER) <= 90 THEN 3
+                    WHEN CAST(day_of_year AS INTEGER) <= 120 THEN 4
+                    WHEN CAST(day_of_year AS INTEGER) <= 151 THEN 5
+                    WHEN CAST(day_of_year AS INTEGER) <= 181 THEN 6
+                    WHEN CAST(day_of_year AS INTEGER) <= 212 THEN 7
+                    WHEN CAST(day_of_year AS INTEGER) <= 243 THEN 8
+                    WHEN CAST(day_of_year AS INTEGER) <= 273 THEN 9
+                    WHEN CAST(day_of_year AS INTEGER) <= 304 THEN 10
+                    WHEN CAST(day_of_year AS INTEGER) <= 334 THEN 11
+                    ELSE 12
+                END as month,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            WHERE day_of_year IS NOT NULL AND day_of_year != ''
+            GROUP BY CAST(reference_year AS INTEGER), month
+            ORDER BY year, month
+        """)
+
+        pheno_month_dist = dict_fetchall(cursor)
+
+        # 获取数据覆盖范围统计
+        cursor.execute("""
+            SELECT
+                MIN(CAST(reference_year AS INTEGER)) as min_year,
+                MAX(CAST(reference_year AS INTEGER)) as max_year,
+                COUNT(DISTINCT station_id) as station_count,
+                COUNT(DISTINCT species_id) as species_count,
+                COUNT(DISTINCT phase_id) as phase_count
+            FROM dwd_observation
+        """)
+
+        pheno_coverage = dict_fetchone(cursor)
+
+        cursor.close()
+        conn.close()
+
+        # ===== PHENO_NEW数据库数据 =====
+        pheno_new_time_location_dist = []
+        pheno_new_month_dist = []
+        pheno_new_coverage = None
+
+        if conn_new:
+            cursor_new = conn_new.cursor()
+
+            # 获取年份-地区的观测数量分布（按1年）
+            cursor_new.execute("""
+                SELECT
+                    CAST(reference_year AS INTEGER) as year,
+                    s.state,
+                    COUNT(o.id) as observation_count
+                FROM dwd_observation o
+                JOIN dwd_station s ON o.station_id = s.id
+                WHERE s.state IS NOT NULL AND s.state != ''
+                GROUP BY CAST(reference_year AS INTEGER), s.state
+                ORDER BY year, state
+            """)
+
+            pheno_new_time_location_dist = dict_fetchall(cursor_new)
+
+            # 获取月份分布
+            cursor_new.execute("""
+                SELECT
+                    CAST(reference_year AS INTEGER) as year,
+                    CASE
+                        WHEN CAST(day_of_year AS INTEGER) <= 31 THEN 1
+                        WHEN CAST(day_of_year AS INTEGER) <= 59 THEN 2
+                        WHEN CAST(day_of_year AS INTEGER) <= 90 THEN 3
+                        WHEN CAST(day_of_year AS INTEGER) <= 120 THEN 4
+                        WHEN CAST(day_of_year AS INTEGER) <= 151 THEN 5
+                        WHEN CAST(day_of_year AS INTEGER) <= 181 THEN 6
+                        WHEN CAST(day_of_year AS INTEGER) <= 212 THEN 7
+                        WHEN CAST(day_of_year AS INTEGER) <= 243 THEN 8
+                        WHEN CAST(day_of_year AS INTEGER) <= 273 THEN 9
+                        WHEN CAST(day_of_year AS INTEGER) <= 304 THEN 10
+                        WHEN CAST(day_of_year AS INTEGER) <= 334 THEN 11
+                        ELSE 12
+                    END as month,
+                    COUNT(o.id) as observation_count
+                FROM dwd_observation o
+                WHERE day_of_year IS NOT NULL AND day_of_year != ''
+                GROUP BY CAST(reference_year AS INTEGER), month
+                ORDER BY year, month
+            """)
+
+            pheno_new_month_dist = dict_fetchall(cursor_new)
+
+            # 获取数据覆盖范围统计
+            cursor_new.execute("""
+                SELECT
+                    MIN(CAST(reference_year AS INTEGER)) as min_year,
+                    MAX(CAST(reference_year AS INTEGER)) as max_year,
+                    COUNT(DISTINCT station_id) as station_count,
+                    COUNT(DISTINCT species_id) as species_count,
+                    COUNT(DISTINCT phase_id) as phase_count
+                FROM dwd_observation
+            """)
+
+            pheno_new_coverage = dict_fetchone(cursor_new)
+
+            cursor_new.close()
+            conn_new.close()
+
+        return jsonify({
+            'pheno': {
+                'time_location_distribution': pheno_time_location_dist,
+                'month_distribution': pheno_month_dist,
+                'coverage': pheno_coverage
+            },
+            'pheno_new': {
+                'time_location_distribution': pheno_new_time_location_dist,
+                'month_distribution': pheno_new_month_dist,
+                'coverage': pheno_new_coverage
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def dict_fetchone(cursor):
+    """将单行查询结果转换为字典"""
+    columns = [col[0] for col in cursor.description]
+    row = cursor.fetchone()
+    return dict(zip(columns, row)) if row else None
+
+@app.route('/api/debug/pheno-new-stations')
+def api_debug_pheno_new_stations():
+    """Debug endpoint to check pheno_new station data"""
+    conn_new = get_db_connection_new()
+
+    if not conn_new:
+        return jsonify({'error': 'Pheno_new database connection failed'}), 500
+
+    try:
+        cursor_new = conn_new.cursor()
+
+        # Check station table structure
+        cursor_new.execute("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'dwd_station'
+            ORDER BY ordinal_position
+        """)
+
+        columns = dict_fetchall(cursor_new)
+
+        # Get sample station data
+        cursor_new.execute("""
+            SELECT * FROM dwd_station LIMIT 5
+        """)
+
+        sample_stations = dict_fetchall(cursor_new)
+
+        # Get stations with coordinates
+        cursor_new.execute("""
+            SELECT COUNT(*) as total_stations,
+                   COUNT(latitude) as stations_with_lat,
+                   COUNT(longitude) as stations_with_lon
+            FROM dwd_station
+        """)
+
+        coord_stats = dict_fetchone(cursor_new)
+
+        cursor_new.close()
+        conn_new.close()
+
+        return jsonify({
+            'columns': columns,
+            'sample_stations': sample_stations,
+            'coordinate_stats': coord_stats
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/data-distribution-detailed')
+def api_data_distribution_detailed():
+    """获取详细的站点级别数据分布 - 用于地图和时间线可视化"""
+    conn = get_db_connection()
+    conn_new = get_db_connection_new()
+
+    if not conn:
+        return jsonify({'error': 'Pheno database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        # ===== PHENO数据库 - 站点级别聚合 =====
+        cursor.execute("""
+            SELECT
+                s.id as station_id,
+                s.station_name,
+                s.latitude,
+                s.longitude,
+                s.state,
+                s.area,
+                o.reference_year,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_station s ON o.station_id = s.id
+            WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
+            GROUP BY s.id, s.station_name, s.latitude, s.longitude, s.state, s.area, o.reference_year
+            ORDER BY s.station_name, o.reference_year
+        """)
+
+        pheno_station_yearly = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        # ===== PHENO_NEW数据库 - 站点级别聚合 =====
+        pheno_new_station_yearly = []
+
+        if conn_new:
+            cursor_new = conn_new.cursor()
+
+            # First, get data without lat/lon filter
+            cursor_new.execute("""
+                SELECT
+                    s.id as station_id,
+                    s.station_name,
+                    s.latitude,
+                    s.longitude,
+                    s.state,
+                    s.area,
+                    o.reference_year,
+                    COUNT(o.id) as observation_count
+                FROM dwd_observation o
+                JOIN dwd_station s ON o.station_id = s.id
+                WHERE s.station_name IS NOT NULL
+                GROUP BY s.id, s.station_name, s.latitude, s.longitude, s.state, s.area, o.reference_year
+                ORDER BY s.station_name, o.reference_year
+            """)
+
+            raw_data = dict_fetchall(cursor_new)
+
+            # Geocode stations that don't have coordinates
+            geocoded_cache = {}  # Cache to avoid geocoding same station multiple times
+
+            for item in raw_data:
+                # If coordinates exist and are valid, use them
+                if item['latitude'] is not None and item['longitude'] is not None:
+                    try:
+                        lat = float(item['latitude'])
+                        lon = float(item['longitude'])
+                        if lat != 0 and lon != 0:  # Valid coordinates
+                            pheno_new_station_yearly.append(item)
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+
+                # Otherwise, try to geocode
+                station_name = item['station_name']
+                if station_name and not station_name.startswith('Historical Station'):
+                    # Check cache first
+                    if station_name not in geocoded_cache:
+                        geocoded = geocode_location(station_name)
+                        if geocoded:
+                            geocoded_cache[station_name] = {
+                                'latitude': geocoded['latitude'],
+                                'longitude': geocoded['longitude']
+                            }
+                        else:
+                            geocoded_cache[station_name] = None
+
+                    # Use cached geocoded coordinates
+                    if geocoded_cache[station_name]:
+                        item['latitude'] = geocoded_cache[station_name]['latitude']
+                        item['longitude'] = geocoded_cache[station_name]['longitude']
+                        pheno_new_station_yearly.append(item)
+
+            cursor_new.close()
+            conn_new.close()
+
+        return jsonify({
+            'pheno': pheno_station_yearly,
+            'pheno_new': pheno_new_station_yearly
+        })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
