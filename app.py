@@ -779,15 +779,20 @@ def api_data_distribution():
             cursor_new = conn_new.cursor()
 
             # 获取年份-地区的观测数量分布（按1年）
+            # For pheno_new, use station_name as location (consistent with /api/pheno-new/locations)
+            # Filter out "Historical Station" prefixes to get actual location names
             cursor_new.execute("""
                 SELECT
                     CAST(reference_year AS INTEGER) as year,
-                    s.state,
+                    s.station_name as state,
                     COUNT(o.id) as observation_count
                 FROM dwd_observation o
                 JOIN dwd_station s ON o.station_id = s.id
-                WHERE s.state IS NOT NULL AND s.state != ''
-                GROUP BY CAST(reference_year AS INTEGER), s.state
+                WHERE s.station_name IS NOT NULL
+                  AND s.station_name != ''
+                  AND s.area_group = 'Historical'
+                  AND NOT s.station_name LIKE 'Historical Station%'
+                GROUP BY CAST(reference_year AS INTEGER), s.station_name
                 ORDER BY year, state
             """)
 
