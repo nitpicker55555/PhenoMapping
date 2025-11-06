@@ -9,92 +9,191 @@
     <style>
         body {
             background-color: #f8f9fa;
+            overflow: hidden;
         }
-        .sidebar {
-            background-color: white;
-            border-right: 1px solid #dee2e6;
+        .main-container {
             height: calc(100vh - 56px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Control Bar */
+        .control-bar {
+            background-color: #2c3e50;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #1a252f;
+        }
+        .control-bar h5 {
+            color: white;
+            margin: 0;
+        }
+        .layout-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .layout-btn {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .layout-btn:hover {
+            background-color: #445566;
+        }
+        .layout-btn.active {
+            background-color: #3498db;
+        }
+
+        /* Panel Container */
+        .panels-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            border-right: 2px solid #dee2e6;
+            background-color: white;
+            overflow: hidden;
+        }
+        .editor-panel:last-child {
+            border-right: none;
+        }
+        .editor-panel.hidden {
+            display: none;
+        }
+
+        /* Sidebar */
+        .panel-sidebar {
+            width: 280px;
+            background-color: #ecf0f1;
+            border-right: 1px solid #bdc3c7;
             overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            padding: 1rem;
+            background-color: #34495e;
+            color: white;
+            font-weight: bold;
         }
         .folder-item {
             cursor: pointer;
-            padding: 0.5rem 1rem;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #d5d8dc;
             transition: background-color 0.2s;
         }
         .folder-item:hover {
-            background-color: #e9ecef;
+            background-color: #d5d8dc;
         }
         .folder-item.active {
-            background-color: #0d6efd;
+            background-color: #3498db;
             color: white;
         }
-        .content-area {
+        .folder-info {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        /* Content Area */
+        .panel-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .content-header {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-tabs {
+            padding: 0.5rem 1rem;
             background-color: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin: 1rem;
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border-bottom: 2px solid #dee2e6;
+            display: flex;
+            gap: 0.5rem;
+            overflow-x: auto;
+        }
+        .file-tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border: none;
+            background: #f8f9fa;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .file-tab:hover {
+            background-color: #e9ecef;
+        }
+        .file-tab.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .content-body {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
         }
         .tif-preview {
             max-width: 100%;
             height: auto;
             border: 1px solid #dee2e6;
-            margin-bottom: 1rem;
+        }
+        .table-preview table {
+            font-size: 0.875rem;
         }
         .odt-editor {
             width: 100%;
-            min-height: 400px;
+            min-height: 300px;
             font-family: monospace;
             border: 1px solid #dee2e6;
             border-radius: 4px;
             padding: 1rem;
         }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #7f8c8d;
+        }
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Status Indicators */
         .save-status {
             display: inline-block;
             margin-left: 1rem;
             font-size: 0.875rem;
         }
         .save-status.success {
-            color: #28a745;
+            color: #27ae60;
         }
         .save-status.error {
-            color: #dc3545;
+            color: #e74c3c;
         }
         .loading-spinner {
             display: none;
             margin-left: 1rem;
-        }
-        .table-preview {
-            overflow-x: auto;
-            margin-top: 1rem;
-        }
-        .table-preview table {
-            font-size: 0.875rem;
-        }
-        .folder-info {
-            font-size: 0.85rem;
-            color: #6c757d;
-            margin-top: 0.25rem;
-        }
-        .file-tabs {
-            border-bottom: 2px solid #dee2e6;
-            margin-bottom: 1rem;
-        }
-        .file-tab {
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            border: none;
-            background: none;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-        }
-        .file-tab:hover {
-            background-color: #f8f9fa;
-        }
-        .file-tab.active {
-            border-bottom-color: #0d6efd;
-            font-weight: bold;
         }
     </style>
 </head>
@@ -118,76 +217,94 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar with folder list -->
-            <div class="col-md-3 p-0">
-                <div class="sidebar">
-                    <div class="p-3 border-bottom">
-                        <h5 class="mb-0">Folder List</h5>
-                        <small class="text-muted">Total: <span id="folder-count">0</span> folders</small>
+    <div class="main-container">
+        <!-- Control Bar -->
+        <div class="control-bar">
+            <h5><i class="fas fa-edit"></i> Transcription Editor</h5>
+            <div class="layout-controls">
+                <button class="layout-btn active" onclick="setLayout('single')">
+                    <i class="fas fa-square"></i> Single Panel
+                </button>
+                <button class="layout-btn" onclick="setLayout('dual')">
+                    <i class="fas fa-columns"></i> Dual Panel
+                </button>
+            </div>
+        </div>
+
+        <!-- Panels Container -->
+        <div class="panels-container">
+            <!-- Left Panel -->
+            <div class="editor-panel" id="panel-left">
+                <div class="panel-sidebar">
+                    <div class="sidebar-header">
+                        Folders (Panel 1)
                     </div>
-                    <div id="folder-list">
+                    <div id="folder-list-left">
                         <!-- Folders will be loaded here -->
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="content-header">
+                        <h5 class="mb-0" id="folder-name-left">No folder selected</h5>
+                        <div>
+                            <button class="btn btn-sm btn-primary" onclick="saveFile('left')">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="fas fa-sync"></i> Merge
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="runMerge(false)">Merge Only</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="runMerge(true)">Merge + Import</a></li>
+                                </ul>
+                            </div>
+                            <span class="save-status" id="status-left"></span>
+                            <div class="spinner-border spinner-border-sm loading-spinner" id="spinner-left"></div>
+                        </div>
+                    </div>
+                    <div class="file-tabs" id="file-tabs-left">
+                        <!-- File tabs will be here -->
+                    </div>
+                    <div class="content-body" id="content-left">
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <h5>Select a folder to begin</h5>
+                            <p>Choose a folder from the sidebar to view and edit its contents</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Main content area -->
-            <div class="col-md-9">
-                <div class="content-area" id="welcome-message">
-                    <h4>Welcome to Transcription Editor</h4>
-                    <p>Please select a folder from the left sidebar to view and edit its contents.</p>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> 
-                        Select folders containing "Tabelle" to edit phenological observation data tables.
+            <!-- Right Panel -->
+            <div class="editor-panel hidden" id="panel-right">
+                <div class="panel-sidebar">
+                    <div class="sidebar-header">
+                        Folders (Panel 2)
+                    </div>
+                    <div id="folder-list-right">
+                        <!-- Folders will be loaded here -->
                     </div>
                 </div>
-
-                <div class="content-area" id="editor-area" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4 id="current-folder-name">Folder Name</h4>
+                <div class="panel-content">
+                    <div class="content-header">
+                        <h5 class="mb-0" id="folder-name-right">No folder selected</h5>
                         <div>
-                            <button class="btn btn-primary" onclick="saveCurrentFile()">
+                            <button class="btn btn-sm btn-primary" onclick="saveFile('right')">
                                 <i class="fas fa-save"></i> Save
                             </button>
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-sync"></i> Merge Data
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="#" onclick="runMergeProcess(false)">Merge Only</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="runMergeProcess(true)">Merge and Import to Database</a></li>
-                                </ul>
-                            </div>
-                            <span class="save-status"></span>
-                            <div class="spinner-border spinner-border-sm loading-spinner" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
+                            <span class="save-status" id="status-right"></span>
+                            <div class="spinner-border spinner-border-sm loading-spinner" id="spinner-right"></div>
                         </div>
                     </div>
-
-                    <div class="file-tabs" id="file-tabs">
-                        <!-- File tabs will be loaded here -->
+                    <div class="file-tabs" id="file-tabs-right">
+                        <!-- File tabs will be here -->
                     </div>
-
-                    <div id="tif-preview" style="display: none;">
-                        <h5>Scanned Image Preview</h5>
-                        <img id="tif-image" class="tif-preview" alt="TIF preview">
-                    </div>
-
-                    <div id="odt-editor-container" style="display: none;">
-                        <h5>ODT File Content</h5>
-                        <div class="alert alert-info mb-3">
-                            <i class="fas fa-info-circle"></i> 
-                            You can edit data directly in the table below. Click on a cell to edit, then click "Save" when finished.
-                        </div>
-                        <div id="table-preview" class="table-preview">
-                            <!-- Table preview will be loaded here -->
-                        </div>
-                        <div class="mt-3">
-                            <label for="odt-content">Raw Text Content:</label>
-                            <textarea id="odt-content" class="odt-editor" readonly></textarea>
+                    <div class="content-body" id="content-right">
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <h5>Select a folder to begin</h5>
+                            <p>Choose a folder from the sidebar to view and edit its contents</p>
                         </div>
                     </div>
                 </div>
@@ -198,271 +315,205 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        let currentFolder = null;
-        let currentFile = null;
         let folders = [];
-        let currentTables = [];
+        let currentLayout = 'single';
 
-        // Load folder list on page load
+        // State for each panel
+        let panelState = {
+            left: { folder: null, currentFile: null, tables: [] },
+            right: { folder: null, currentFile: null, tables: [] }
+        };
+
         $(document).ready(function() {
             loadFolders();
         });
 
         function loadFolders() {
             $.get('/api/transcription/folders', function(data) {
-                // Sort folders by index (convert to number for proper sorting)
                 folders = data.sort((a, b) => {
-                    const indexA = parseInt(a.index) || 999999; // Put folders without index at the end
+                    const indexA = parseInt(a.index) || 999999;
                     const indexB = parseInt(b.index) || 999999;
                     return indexA - indexB;
                 });
-                
-                $('#folder-count').text(folders.length);
-                
-                const folderList = $('#folder-list');
-                folderList.empty();
-                
-                folders.forEach(folder => {
-                    const folderItem = $(`
-                        <div class="folder-item" data-folder="${folder.name}">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <strong>${folder.name}</strong>
-                                    <div class="folder-info">
-                                        ${folder.hasOdt ? '<i class="fas fa-file-alt"></i> ODT' : ''}
-                                        ${folder.hasTif ? '<i class="fas fa-image"></i> TIF' : ''}
-                                        ${folder.isTabelle ? '<span class="badge bg-primary ms-1">Table</span>' : ''}
-                                    </div>
-                                </div>
-                                <small class="text-muted">#${folder.index || '-'}</small>
-                            </div>
-                        </div>
-                    `);
-                    
-                    folderItem.click(function() {
-                        selectFolder(folder.name);
-                    });
-                    
-                    folderList.append(folderItem);
-                });
+
+                renderFolderList('left');
+                renderFolderList('right');
             });
         }
 
-        function selectFolder(folderName) {
-            currentFolder = folderName;
-            
-            // Update UI
-            $('.folder-item').removeClass('active');
-            $(`.folder-item[data-folder="${folderName}"]`).addClass('active');
-            
-            $('#welcome-message').hide();
-            $('#editor-area').show();
-            $('#current-folder-name').text(folderName);
-            
-            // Clear previous content when switching folders
-            $('#table-preview').empty();
-            $('#odt-content').val('');
-            $('#tif-image').attr('src', '');
-            currentTables = [];
-            
-            // Load folder contents
-            loadFolderContents(folderName);
+        function renderFolderList(panelId) {
+            const container = $(`#folder-list-${panelId}`);
+            container.empty();
+
+            folders.forEach(folder => {
+                const item = $(`
+                    <div class="folder-item" data-folder="${folder.name}">
+                        <div><strong>${folder.name}</strong></div>
+                        <div class="folder-info">
+                            ${folder.hasOdt ? '<i class="fas fa-file-alt"></i>' : ''}
+                            ${folder.hasTif ? '<i class="fas fa-image"></i>' : ''}
+                            ${folder.isTabelle ? '<span class="badge bg-primary">Table</span>' : ''}
+                            <span class="float-end">#${folder.index || '-'}</span>
+                        </div>
+                    </div>
+                `);
+
+                item.click(function() {
+                    selectFolder(panelId, folder.name);
+                });
+
+                container.append(item);
+            });
         }
 
-        function loadFolderContents(folderName) {
+        function selectFolder(panelId, folderName) {
+            panelState[panelId].folder = folderName;
+            panelState[panelId].currentFile = null;
+            panelState[panelId].tables = [];
+
+            // Update UI
+            $(`#folder-list-${panelId} .folder-item`).removeClass('active');
+            $(`#folder-list-${panelId} .folder-item[data-folder="${folderName}"]`).addClass('active');
+            $(`#folder-name-${panelId}`).text(folderName);
+
+            // Load folder contents
+            loadFolderContents(panelId, folderName);
+        }
+
+        function loadFolderContents(panelId, folderName) {
             $.get(`/api/transcription/folder/${encodeURIComponent(folderName)}`, function(data) {
-                // Create file tabs
-                const fileTabs = $('#file-tabs');
+                const fileTabs = $(`#file-tabs-${panelId}`);
                 fileTabs.empty();
-                
+
                 data.files.forEach((file, index) => {
-                    const tab = $(`
+                    const fileTab = $(`
                         <button class="file-tab ${index === 0 ? 'active' : ''}" data-file="${file.name}">
                             ${file.type === 'tif' ? '<i class="fas fa-image"></i>' : '<i class="fas fa-file-alt"></i>'}
                             ${file.name}
                         </button>
                     `);
-                    
-                    tab.click(function() {
-                        showFile(file);
+
+                    fileTab.click(function() {
+                        showFile(panelId, file);
                     });
-                    
-                    fileTabs.append(tab);
+
+                    fileTabs.append(fileTab);
                 });
-                
-                // Show first file
+
                 if (data.files.length > 0) {
-                    showFile(data.files[0]);
+                    showFile(panelId, data.files[0]);
                 }
             });
         }
 
-        function showFile(file) {
-            currentFile = file;
-            
+        function showFile(panelId, file) {
+            panelState[panelId].currentFile = file;
+
             // Update active tab
-            $('.file-tab').removeClass('active');
-            $(`.file-tab[data-file="${file.name}"]`).addClass('active');
-            
+            $(`#file-tabs-${panelId} .file-tab`).removeClass('active');
+            $(`#file-tabs-${panelId} .file-tab[data-file="${file.name}"]`).addClass('active');
+
+            const contentArea = $(`#content-${panelId}`);
+            contentArea.empty();
+
             if (file.type === 'tif') {
-                $('#tif-preview').show();
-                $('#odt-editor-container').hide();
-                $('#tif-image').attr('src', `/api/transcription/image/${encodeURIComponent(currentFolder)}/${encodeURIComponent(file.name)}`);
-                
-                // Clear ODT content when showing TIF
-                $('#table-preview').empty();
-                $('#odt-content').val('');
-                currentTables = [];
+                const folderName = panelState[panelId].folder;
+                contentArea.html(`
+                    <h5>Scanned Image Preview</h5>
+                    <img class="tif-preview" src="/api/transcription/image/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}" alt="TIF preview">
+                `);
             } else if (file.type === 'odt') {
-                $('#tif-preview').hide();
-                $('#odt-editor-container').show();
-                loadOdtContent(file);
+                loadOdtContent(panelId, file);
             }
         }
 
-        function loadOdtContent(file) {
-            $('.loading-spinner').show();
-            
-            $.get(`/api/transcription/odt/${encodeURIComponent(currentFolder)}/${encodeURIComponent(file.name)}`, function(data) {
-                $('.loading-spinner').hide();
-                
-                // Show raw content in textarea
-                $('#odt-content').val(data.raw_content);
-                
-                // Store tables for editing
-                currentTables = data.tables || [];
-                
-                // Clear table preview first
-                const tablePreview = $('#table-preview');
-                tablePreview.empty();
-                
-                // Show table preview if available
-                if (currentTables.length > 0) {
-                    currentTables.forEach((table, index) => {
-                        const tableHtml = createEditableTableHtml(table, index);
-                        tablePreview.append(tableHtml);
+        function loadOdtContent(panelId, file) {
+            const folderName = panelState[panelId].folder;
+
+            $(`#spinner-${panelId}`).show();
+
+            $.get(`/api/transcription/odt/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`, function(data) {
+                $(`#spinner-${panelId}`).hide();
+
+                panelState[panelId].tables = data.tables || [];
+
+                const contentArea = $(`#content-${panelId}`);
+                contentArea.empty();
+
+                let html = '<h5>ODT File Content</h5>';
+                html += '<div class="alert alert-info mb-3"><i class="fas fa-info-circle"></i> Click on cells to edit. Click Save when finished.</div>';
+
+                if (panelState[panelId].tables.length > 0) {
+                    html += '<div class="table-preview">';
+                    panelState[panelId].tables.forEach((table, tIndex) => {
+                        html += `<h6>Table ${tIndex + 1}</h6>`;
+                        html += `<table class="table table-bordered table-sm" data-table="${tIndex}">`;
+                        table.forEach((row, rIndex) => {
+                            html += '<tr>';
+                            row.forEach((cell, cIndex) => {
+                                const tag = rIndex === 0 ? 'th' : 'td';
+                                html += `<${tag} contenteditable="true"
+                                        data-row="${rIndex}" data-col="${cIndex}"
+                                        onblur="updateCell('${panelId}', ${tIndex}, ${rIndex}, ${cIndex}, this)">${cell || '-'}</${tag}>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</table>';
                     });
+                    html += '</div>';
                 } else {
-                    // Show a message when no tables are found
-                    tablePreview.html('<div class="alert alert-info">No tables found in this ODT file.</div>');
+                    html += '<div class="alert alert-info">No tables found</div>';
                 }
+
+                html += `<div class="mt-3"><label>Raw Text:</label><textarea class="odt-editor" readonly>${data.raw_content}</textarea></div>`;
+
+                contentArea.html(html);
             });
         }
 
-        function createEditableTableHtml(tableData, index) {
-            let html = `<h6>Table ${index + 1}</h6>`;
-            html += `<table class="table table-bordered table-sm" data-table-index="${index}">`;
-            
-            tableData.forEach((row, rowIndex) => {
-                html += '<tr>';
-                row.forEach((cell, colIndex) => {
-                    const tag = rowIndex === 0 ? 'th' : 'td';
-                    html += `<${tag} contenteditable="true" 
-                            data-row="${rowIndex}" 
-                            data-col="${colIndex}"
-                            data-original="${escapeHtml(cell || '')}"
-                            onblur="updateTableCell(${index}, ${rowIndex}, ${colIndex}, this)"
-                            onfocus="selectAllText(this)">${cell || '-'}</${tag}>`;
-                });
-                html += '</tr>';
-            });
-            
-            html += '</table>';
-            return html;
-        }
+        function updateCell(panelId, tableIndex, rowIndex, colIndex, element) {
+            if (!panelState[panelId].tables[tableIndex]) return;
 
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-
-        function selectAllText(element) {
-            const range = document.createRange();
-            range.selectNodeContents(element);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-
-        function updateTableCell(tableIndex, rowIndex, colIndex, element) {
             const newValue = element.textContent;
-            const originalValue = element.getAttribute('data-original');
-            
-            // Update the data structure
-            if (currentTables[tableIndex]) {
-                currentTables[tableIndex][rowIndex][colIndex] = newValue;
-                
-                // Mark as changed if different from original
-                if (newValue !== originalValue) {
-                    $(element).css('background-color', '#fffacd');
-                } else {
-                    $(element).css('background-color', '');
-                }
-            }
+            panelState[panelId].tables[tableIndex][rowIndex][colIndex] = newValue;
+            $(element).css('background-color', '#fffacd');
         }
 
-        function saveCurrentFile() {
-            if (!currentFile || currentFile.type !== 'odt') {
-                alert('Only ODT files can be edited');
+        function saveFile(panelId) {
+            const state = panelState[panelId];
+            if (!state.currentFile || state.currentFile.type !== 'odt') {
+                alert('Only ODT files can be saved');
                 return;
             }
-            
-            const content = $('#odt-content').val();
-            $('.loading-spinner').show();
-            $('.save-status').removeClass('success error').text('');
-            
-            // Prepare data with tables
-            const saveData = {
-                content: content,
-                tables: currentTables
-            };
-            
+
+            $(`#spinner-${panelId}`).show();
+            $(`#status-${panelId}`).removeClass('success error').text('');
+
+            const content = $(`#content-${panelId} .odt-editor`).val();
+
             $.ajax({
-                url: `/api/transcription/save/${encodeURIComponent(currentFolder)}/${encodeURIComponent(currentFile.name)}`,
+                url: `/api/transcription/save/${encodeURIComponent(state.folder)}/${encodeURIComponent(state.currentFile.name)}`,
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify(saveData),
-                success: function(response) {
-                    $('.loading-spinner').hide();
-                    $('.save-status').addClass('success').text('Saved successfully!');
-                    
-                    // Reset background colors
-                    $('[contenteditable="true"]').css('background-color', '');
-                    
-                    // Update original values
-                    $('[contenteditable="true"]').each(function() {
-                        $(this).attr('data-original', $(this).text());
-                    });
-                    
-                    setTimeout(() => {
-                        $('.save-status').removeClass('success').text('');
-                    }, 3000);
+                data: JSON.stringify({ content: content, tables: state.tables }),
+                success: function() {
+                    $(`#spinner-${panelId}`).hide();
+                    $(`#status-${panelId}`).addClass('success').text('Saved!');
+                    $(`#content-${panelId} [contenteditable]`).css('background-color', '');
+                    setTimeout(() => $(`#status-${panelId}`).text(''), 3000);
                 },
                 error: function(error) {
-                    $('.loading-spinner').hide();
-                    $('.save-status').addClass('error').text('Save failed: ' + error.responseJSON.error);
+                    $(`#spinner-${panelId}`).hide();
+                    $(`#status-${panelId}`).addClass('error').text('Save failed');
                 }
             });
         }
 
-        function runMergeProcess(importToDb) {
-            const message = importToDb ? 
-                'Are you sure you want to re-run the data merge process and import to database? This may take several minutes.' :
-                'Are you sure you want to re-run the data merge process? This may take several minutes.';
-                
-            if (!confirm(message)) {
-                return;
-            }
-            
+        function runMerge(importToDb) {
+            if (!confirm('Run merge process?')) return;
+
             $('.loading-spinner').show();
-            $('.save-status').removeClass('success error').text('Processing...');
-            
+
             $.ajax({
                 url: '/api/transcription/merge',
                 method: 'POST',
@@ -470,23 +521,26 @@
                 data: JSON.stringify({ import_to_db: importToDb }),
                 success: function(response) {
                     $('.loading-spinner').hide();
-                    
-                    if (response.data_refreshed) {
-                        $('.save-status').addClass('success').text('Data merged and imported successfully!');
-                        alert('Data merged and imported successfully!\n\n' + 
-                              'Merge output:\n' + response.merge_output + '\n\n' +
-                              'Import output:\n' + response.import_output);
-                    } else {
-                        $('.save-status').addClass('success').text('Data merged successfully!');
-                        alert('Data merged successfully!\n\n' + response.merge_output);
-                    }
+                    alert('Merge completed!\n' + response.merge_output);
                 },
                 error: function(error) {
                     $('.loading-spinner').hide();
-                    $('.save-status').addClass('error').text('Merge failed: ' + error.responseJSON.error);
                     alert('Merge failed: ' + error.responseJSON.error);
                 }
             });
+        }
+
+        function setLayout(layout) {
+            currentLayout = layout;
+
+            $('.layout-btn').removeClass('active');
+            $(`.layout-btn:contains('${layout === 'single' ? 'Single' : 'Dual'}')`).addClass('active');
+
+            if (layout === 'single') {
+                $('#panel-right').addClass('hidden');
+            } else {
+                $('#panel-right').removeClass('hidden');
+            }
         }
     </script>
 </body>
