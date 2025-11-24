@@ -920,22 +920,19 @@ def api_data_distribution_detailed():
     try:
         cursor = conn.cursor()
 
-        # ===== PHENO数据库 - 站点级别聚合 =====
+        # ===== PHENO数据库 - 站点级别聚合（使用物化视图优化） =====
         cursor.execute("""
             SELECT
-                s.id as station_id,
-                s.station_name,
-                s.latitude,
-                s.longitude,
-                s.state,
-                s.area,
-                o.reference_year,
-                COUNT(o.id) as observation_count
-            FROM dwd_observation o
-            JOIN dwd_station s ON o.station_id = s.id
-            WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
-            GROUP BY s.id, s.station_name, s.latitude, s.longitude, s.state, s.area, o.reference_year
-            ORDER BY s.station_name, o.reference_year
+                station_id,
+                station_name,
+                latitude,
+                longitude,
+                state,
+                area,
+                reference_year,
+                observation_count
+            FROM mv_station_yearly_stats
+            ORDER BY station_name, reference_year
         """)
 
         pheno_station_yearly = dict_fetchall(cursor)
