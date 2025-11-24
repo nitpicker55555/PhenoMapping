@@ -146,96 +146,91 @@ def api_overview():
 
 @app.route('/api/stations')
 def api_stations():
-    """站点数据API"""
+    """站点数据API - 使用物化视图优化性能"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor = conn.cursor()
-        
-        # 获取站点基本信息
+
+        # 使用物化视图快速获取站点统计信息
         cursor.execute("""
-            SELECT 
-                s.id, s.station_name, s.latitude, s.longitude, 
-                s.altitude, s.state, s.area_group, s.area,
-                COUNT(o.id) as observation_count
-            FROM dwd_station s
-            LEFT JOIN dwd_observation o ON s.id = o.station_id
-            GROUP BY s.id, s.station_name, s.latitude, s.longitude, 
-                     s.altitude, s.state, s.area_group, s.area
+            SELECT
+                id, station_name, latitude, longitude,
+                altitude, state, area_group, area,
+                observation_count
+            FROM mv_station_stats
             ORDER BY observation_count DESC
         """)
-        
+
         stations = dict_fetchall(cursor)
-        
+
         cursor.close()
         conn.close()
-        
+
         return jsonify(stations)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/species')
 def api_species():
-    """物种数据API"""
+    """物种数据API - 使用物化视图优化性能"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor = conn.cursor()
-        
+
+        # 使用物化视图快速获取物种统计信息
         cursor.execute("""
-            SELECT 
+            SELECT
                 s.id, s.species_name_de, s.species_name_en, s.species_name_la,
                 sg.group_name,
-                COUNT(o.id) as observation_count
-            FROM dwd_species s
+                s.observation_count
+            FROM mv_species_stats s
             LEFT JOIN dwd_species_group sg ON s.id = sg.species_id
-            LEFT JOIN dwd_observation o ON s.id = o.species_id
-            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la, sg.group_name
             ORDER BY observation_count DESC
         """)
-        
+
         species = dict_fetchall(cursor)
-        
+
         cursor.close()
         conn.close()
-        
+
         return jsonify(species)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/phases')
 def api_phases():
-    """物候期数据API"""
+    """物候期数据API - 使用物化视图优化性能"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor = conn.cursor()
-        
+
+        # 使用物化视图快速获取物候期统计信息
         cursor.execute("""
-            SELECT 
-                p.id, p.phase_name_de, p.phase_name_en,
-                COUNT(o.id) as observation_count
-            FROM dwd_phase p
-            LEFT JOIN dwd_observation o ON p.id = o.phase_id
-            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            SELECT
+                id, phase_name_de, phase_name_en,
+                observation_count
+            FROM mv_phase_stats
             ORDER BY observation_count DESC
         """)
-        
+
         phases = dict_fetchall(cursor)
-        
+
         cursor.close()
         conn.close()
-        
+
         return jsonify(phases)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

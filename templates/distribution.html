@@ -1,0 +1,996 @@
+{% extends "base.html" %}
+
+{% block title %}Data Distribution - Plant Phenology Observation Data Visualization Platform{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>
+            <i class="fas fa-th text-primary"></i>
+            Data Temporal-Spatial Distribution
+        </h2>
+        <p class="text-muted">Visualize the distribution of phenology observations across time and space</p>
+    </div>
+</div>
+
+<!-- Coverage Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-success h-100">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-database me-2"></i>Pheno Database (Modern Data)
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">Time Range</small>
+                        <h5 id="pheno-time-range">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Stations</small>
+                        <h5 id="pheno-stations">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Species</small>
+                        <h5 id="pheno-species">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Phases</small>
+                        <h5 id="pheno-phases">-</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-info h-100">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-database me-2"></i>Pheno New Database (Historical Data)
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">Time Range</small>
+                        <h5 id="pheno-new-time-range">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Stations</small>
+                        <h5 id="pheno-new-stations">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Species</small>
+                        <h5 id="pheno-new-species">-</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Phases</small>
+                        <h5 id="pheno-new-phases">-</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Control Panel -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Visualization Type</label>
+                        <select class="form-select" id="viz-type">
+                            <option value="map" selected>Interactive Map (Time + Location + Count)</option>
+                            <option value="heatmap">Regional Heatmap (1-year intervals)</option>
+                            <option value="monthly">Monthly Distribution</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Source</label>
+                        <select class="form-select" id="data-source-filter">
+                            <option value="both" selected>Both Databases</option>
+                            <option value="pheno">Pheno Only (Modern)</option>
+                            <option value="pheno_new">Pheno New Only (Historical)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Time Range</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control form-control-sm" id="year-start" placeholder="Start" min="1800" max="2100">
+                            <input type="number" class="form-control form-control-sm" id="year-end" placeholder="End" min="1800" max="2100">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Color Scale</label>
+                        <select class="form-select" id="scale-type">
+                            <option value="log" selected>Logarithmic</option>
+                            <option value="linear">Linear</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100 mt-4" id="refresh-btn">
+                            <i class="fas fa-sync-alt me-2"></i>Apply & Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Map View -->
+<div class="row mb-4" id="map-section">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-map-marked-alt me-2"></i>
+                    Interactive Station Distribution Map
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="distribution-map" style="height: 600px; width: 100%;"></div>
+                <div class="mt-3">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Circle size represents observation count. Hover over circles for details.
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <small>
+                                <span class="badge" style="background-color: rgba(44, 82, 52, 0.7);">
+                                    <i class="fas fa-circle"></i> Pheno (Modern)
+                                </span>
+                                <span class="badge" style="background-color: rgba(23, 162, 184, 0.7);">
+                                    <i class="fas fa-circle"></i> Pheno New (Historical)
+                                </span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Regional Heatmap (Original) -->
+<div class="row mb-4" id="heatmap-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Regional Distribution Heatmap (1-year intervals)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div style="width: 100%; overflow-x: auto; overflow-y: auto; max-height: 800px;">
+                    <canvas id="distribution-chart"></canvas>
+                </div>
+                <div class="mt-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Color intensity represents observation count.
+                                <span id="scale-info">Logarithmic scale is used for better visualization of sparse data.</span>
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small>
+                                <span class="badge" style="background-color: rgba(44, 82, 52, 0.8);">
+                                    <i class="fas fa-square"></i> Pheno (Modern)
+                                </span>
+                                <span class="badge" style="background-color: rgba(23, 162, 184, 0.8);">
+                                    <i class="fas fa-square"></i> Pheno New (Historical)
+                                </span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Distribution -->
+<div class="row mb-4" id="monthly-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-calendar me-2"></i>
+                    Monthly Distribution Over Years
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="monthly-chart" style="max-height: 500px;"></canvas>
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Showing the distribution of observations across months for each year
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Density Information -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-layer-group me-2"></i>
+                    Top Regions by Data Density
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped" id="top-regions-table">
+                        <thead>
+                            <tr>
+                                <th>Region</th>
+                                <th>Observations</th>
+                                <th>Density</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="3" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-clock me-2"></i>
+                    Top Time Periods by Data Density
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped" id="top-periods-table">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Observations</th>
+                                <th>Density</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="3" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+
+<script>
+let distributionData = null;
+let detailedData = null;
+let currentChart = null;
+let monthlyChart = null;
+let distributionMap = null;
+
+$(document).ready(function() {
+    loadDistributionData();
+    loadDetailedData();
+
+    $('#refresh-btn').click(function() {
+        renderCurrentView();
+    });
+
+    $('#viz-type').change(function() {
+        switchView($(this).val());
+    });
+
+    $('#scale-type').change(function() {
+        const scaleType = $(this).val();
+        if (scaleType === 'log') {
+            $('#scale-info').text('Logarithmic scale is used for better visualization of sparse data.');
+        } else {
+            $('#scale-info').text('Linear scale shows the actual observation counts.');
+        }
+        renderCurrentView();
+    });
+});
+
+function switchView(vizType) {
+    console.log('Switching to view:', vizType);
+
+    // Destroy all charts before switching
+    if (currentChart) {
+        currentChart.destroy();
+        currentChart = null;
+    }
+    if (monthlyChart) {
+        monthlyChart.destroy();
+        monthlyChart = null;
+    }
+
+    // Hide all sections
+    $('#map-section').hide();
+    $('#heatmap-section').hide();
+    $('#monthly-section').hide();
+
+    // Show selected section and render
+    switch(vizType) {
+        case 'map':
+            $('#map-section').show();
+            renderMap();
+            break;
+        case 'heatmap':
+            $('#heatmap-section').show();
+            setTimeout(() => renderHeatmap(), 100);
+            break;
+        case 'monthly':
+            $('#monthly-section').show();
+            setTimeout(() => renderMonthlyChart(), 100);
+            break;
+    }
+}
+
+function renderCurrentView() {
+    const vizType = $('#viz-type').val();
+    switchView(vizType);
+}
+
+function loadDetailedData() {
+    console.log('Loading detailed distribution data...');
+    $.get('/api/data-distribution-detailed')
+        .done(function(data) {
+            detailedData = data;
+            console.log('Detailed data loaded:', {
+                pheno_count: data.pheno ? data.pheno.length : 0,
+                pheno_new_count: data.pheno_new ? data.pheno_new.length : 0
+            });
+            console.log('Sample pheno_new data:', data.pheno_new ? data.pheno_new.slice(0, 3) : []);
+            // Initialize map view as default
+            renderMap();
+        })
+        .fail(function(xhr, status, error) {
+            console.error('Failed to load detailed distribution data:', error);
+            console.error('Response:', xhr.responseText);
+        });
+}
+
+function loadDistributionData() {
+    console.log('Loading distribution data...');
+    $.get('/api/data-distribution')
+        .done(function(data) {
+            distributionData = data;
+            console.log('Distribution data loaded:', {
+                pheno_locations: data.pheno?.time_location_distribution?.length || 0,
+                pheno_new_locations: data.pheno_new?.time_location_distribution?.length || 0
+            });
+
+            // Debug: Show unique states from pheno_new
+            if (data.pheno_new?.time_location_distribution) {
+                const phenoNewStates = [...new Set(data.pheno_new.time_location_distribution.map(d => d.state))];
+                console.log('Pheno_new unique states:', phenoNewStates);
+            }
+
+            updateStatistics(data);
+            renderHeatmap();
+            updateDensityTables(data);
+        })
+        .fail(function() {
+            alert('Failed to load distribution data');
+        });
+}
+
+function updateStatistics(data) {
+    // Pheno database statistics
+    if (data.pheno && data.pheno.coverage) {
+        const pheno = data.pheno.coverage;
+        $('#pheno-time-range').text(`${pheno.min_year} - ${pheno.max_year}`);
+        $('#pheno-stations').text(pheno.station_count.toLocaleString());
+        $('#pheno-species').text(pheno.species_count.toLocaleString());
+        $('#pheno-phases').text(pheno.phase_count.toLocaleString());
+    }
+
+    // Pheno New database statistics
+    if (data.pheno_new && data.pheno_new.coverage) {
+        const phenoNew = data.pheno_new.coverage;
+        $('#pheno-new-time-range').text(`${phenoNew.min_year} - ${phenoNew.max_year}`);
+        $('#pheno-new-stations').text(phenoNew.station_count.toLocaleString());
+        $('#pheno-new-species').text(phenoNew.species_count.toLocaleString());
+        $('#pheno-new-phases').text(phenoNew.phase_count.toLocaleString());
+    } else {
+        $('#pheno-new-time-range').text('N/A');
+        $('#pheno-new-stations').text('N/A');
+        $('#pheno-new-species').text('N/A');
+        $('#pheno-new-phases').text('N/A');
+    }
+}
+
+function renderHeatmap() {
+    if (!distributionData) return;
+
+    const phenoData = distributionData.pheno.time_location_distribution || [];
+    const phenoNewData = distributionData.pheno_new.time_location_distribution || [];
+    const scaleType = $('#scale-type').val();
+    const dataSourceFilter = $('#data-source-filter').val();
+    const yearStart = parseInt($('#year-start').val()) || null;
+    const yearEnd = parseInt($('#year-end').val()) || null;
+
+    // Filter data based on source and year range
+    let filteredPhenoData = [];
+    let filteredPhenoNewData = [];
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno') {
+        filteredPhenoData = phenoData.filter(d => {
+            if (yearStart && d.year < yearStart) return false;
+            if (yearEnd && d.year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno_new') {
+        filteredPhenoNewData = phenoNewData.filter(d => {
+            if (yearStart && d.year < yearStart) return false;
+            if (yearEnd && d.year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    // Combine all states and years from both databases
+    const allData = [...filteredPhenoData, ...filteredPhenoNewData];
+    // Sort states alphabetically (a-z)
+    const states = [...new Set(allData.map(d => d.state))].sort((a, b) => a.localeCompare(b));
+    const years = [...new Set(allData.map(d => d.year))].sort((a, b) => a - b);
+
+    if (years.length === 0 || states.length === 0) {
+        console.warn('No data to display in heatmap');
+        return;
+    }
+
+    console.log(`Heatmap: ${states.length} states, ${years.length} years`);
+
+    // Create matrix data for pheno database (green)
+    const phenoMatrixData = [];
+    const phenoMaxValues = [];
+
+    filteredPhenoData.forEach(item => {
+        const value = scaleType === 'log' && item.observation_count > 0
+            ? Math.log10(item.observation_count + 1)
+            : item.observation_count;
+
+        phenoMaxValues.push(value);
+        phenoMatrixData.push({
+            x: item.year.toString(),
+            y: item.state,
+            v: value,
+            count: item.observation_count,
+            source: 'pheno'
+        });
+    });
+
+    // Create matrix data for pheno_new database (blue)
+    const phenoNewMatrixData = [];
+    const phenoNewMaxValues = [];
+
+    filteredPhenoNewData.forEach(item => {
+        const value = scaleType === 'log' && item.observation_count > 0
+            ? Math.log10(item.observation_count + 1)
+            : item.observation_count;
+
+        phenoNewMaxValues.push(value);
+        phenoNewMatrixData.push({
+            x: item.year.toString(),
+            y: item.state,
+            v: value,
+            count: item.observation_count,
+            source: 'pheno_new'
+        });
+    });
+
+    // Get max values for color scaling
+    const phenoMaxValue = phenoMaxValues.length > 0 ? Math.max(...phenoMaxValues) : 1;
+    const phenoNewMaxValue = phenoNewMaxValues.length > 0 ? Math.max(...phenoNewMaxValues) : 1;
+
+    const canvas = document.getElementById('distribution-chart');
+    const ctx = canvas.getContext('2d');
+
+    if (currentChart) {
+        currentChart.destroy();
+    }
+
+    // Set canvas height based on number of states (minimum 20px per state)
+    const minHeightPerState = 20;
+    const calculatedHeight = Math.max(400, states.length * minHeightPerState);
+    canvas.style.height = calculatedHeight + 'px';
+    canvas.height = calculatedHeight;
+
+    // Determine cell width (limit minimum to 2px for readability)
+    const cellWidth = Math.max(2, (800 / years.length) - 1);
+
+    console.log(`Canvas height: ${calculatedHeight}px for ${states.length} states`);
+
+    currentChart = new Chart(ctx, {
+        type: 'matrix',
+        data: {
+            datasets: [
+                {
+                    label: 'Pheno (Modern)',
+                    data: phenoMatrixData,
+                    backgroundColor(context) {
+                        if (!context.dataset.data || !context.dataset.data[context.dataIndex]) {
+                            return 'rgba(0, 0, 0, 0)';
+                        }
+                        const value = context.dataset.data[context.dataIndex].v;
+                        const alpha = Math.max(0.5, Math.min(1.0, value / phenoMaxValue * 0.8 + 0.2));
+                        return `rgba(76, 175, 80, ${alpha})`; // Brighter green
+                    },
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    borderWidth: 0.5,
+                    width: cellWidth,
+                    height: ({chart}) => Math.max(15, (chart.chartArea || {}).height / states.length - 1)
+                },
+                {
+                    label: 'Pheno New (Historical)',
+                    data: phenoNewMatrixData,
+                    backgroundColor(context) {
+                        if (!context.dataset.data || !context.dataset.data[context.dataIndex]) {
+                            return 'rgba(0, 0, 0, 0)';
+                        }
+                        const value = context.dataset.data[context.dataIndex].v;
+                        const alpha = Math.max(0.5, Math.min(1.0, value / phenoNewMaxValue * 0.8 + 0.2));
+                        return `rgba(33, 150, 243, ${alpha})`; // Brighter blue
+                    },
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    borderWidth: 0.5,
+                    width: cellWidth,
+                    height: ({chart}) => Math.max(15, (chart.chartArea || {}).height / states.length - 1)
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        title(context) {
+                            // Show full region name in tooltip title
+                            if (context && context[0]) {
+                                const item = context[0].dataset.data[context[0].dataIndex];
+                                if (item) {
+                                    return item.y; // Full region name
+                                }
+                            }
+                            return '';
+                        },
+                        label(context) {
+                            const item = context.dataset.data[context.dataIndex];
+                            return [
+                                `Source: ${item.source === 'pheno' ? 'Pheno (Modern)' : 'Pheno New (Historical)'}`,
+                                `Year: ${item.x}`,
+                                `Observations: ${item.count.toLocaleString()}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: years.map(y => y.toString()),
+                    offset: true,
+                    ticks: {
+                        autoSkip: true,
+                        maxTicksLimit: 30,
+                        maxRotation: 90,
+                        minRotation: 45,
+                        font: {
+                            size: 9
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    type: 'category',
+                    labels: states,
+                    offset: true,
+                    ticks: {
+                        font: {
+                            size: Math.max(8, Math.min(11, 300 / states.length)) // Adaptive font size
+                        },
+                        callback: function(value, index, ticks) {
+                            // Truncate long labels
+                            const label = this.getLabelForValue(value);
+                            if (label && label.length > 15) {
+                                return label.substring(0, 15) + '...';
+                            }
+                            return label;
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderMonthlyChart() {
+    if (!distributionData) return;
+
+    const phenoMonthlyDist = distributionData.pheno.month_distribution || [];
+    const phenoNewMonthlyDist = distributionData.pheno_new.month_distribution || [];
+    const scaleType = $('#scale-type').val();
+
+    // Combine all years from both databases
+    const allYears = [...new Set([
+        ...phenoMonthlyDist.map(d => d.year),
+        ...phenoNewMonthlyDist.map(d => d.year)
+    ])].sort();
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Create datasets - pheno (green tones) and pheno_new (blue tones)
+    const datasets = [];
+    const greenColors = [
+        '#2c5234', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7',
+        '#d8f3dc', '#95d5b2', '#74c69d', '#52b788', '#40916c', '#2c5234'
+    ];
+    const blueColors = [
+        '#17a2b8', '#20c997', '#28a745', '#007bff', '#6610f2', '#6f42c1',
+        '#e83e8c', '#6f42c1', '#6610f2', '#007bff', '#28a745', '#20c997'
+    ];
+
+    // Pheno datasets (stacked)
+    for (let month = 1; month <= 12; month++) {
+        const data = allYears.map(year => {
+            const item = phenoMonthlyDist.find(d => d.year === year && d.month === month);
+            if (!item) return null;
+            const value = scaleType === 'log' && item.observation_count > 0
+                ? Math.log10(item.observation_count + 1)
+                : item.observation_count;
+            return value;
+        });
+
+        datasets.push({
+            label: `${months[month - 1]} (Pheno)`,
+            data: data,
+            backgroundColor: greenColors[month - 1],
+            borderColor: greenColors[month - 1],
+            borderWidth: 1,
+            stack: 'pheno'
+        });
+    }
+
+    // Pheno New datasets (stacked separately)
+    for (let month = 1; month <= 12; month++) {
+        const data = allYears.map(year => {
+            const item = phenoNewMonthlyDist.find(d => d.year === year && d.month === month);
+            if (!item) return null;
+            const value = scaleType === 'log' && item.observation_count > 0
+                ? Math.log10(item.observation_count + 1)
+                : item.observation_count;
+            return value;
+        });
+
+        datasets.push({
+            label: `${months[month - 1]} (New)`,
+            data: data,
+            backgroundColor: blueColors[month - 1],
+            borderColor: blueColors[month - 1],
+            borderWidth: 1,
+            stack: 'pheno_new'
+        });
+    }
+
+    const ctx = document.getElementById('monthly-chart').getContext('2d');
+
+    if (monthlyChart) {
+        monthlyChart.destroy();
+    }
+
+    monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: allYears.map(y => y.toString()),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 8,
+                        font: {
+                            size: 8
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        autoSkip: true,
+                        maxTicksLimit: 20
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: scaleType === 'log' ? 'Log10(Observations + 1)' : 'Observations'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateDensityTables(data) {
+    // Combine data from both databases
+    const phenoData = data.pheno.time_location_distribution || [];
+    const phenoNewData = data.pheno_new.time_location_distribution || [];
+    const allData = [...phenoData, ...phenoNewData];
+
+    // Calculate region densities
+    const regionCounts = {};
+    allData.forEach(item => {
+        if (!regionCounts[item.state]) {
+            regionCounts[item.state] = 0;
+        }
+        regionCounts[item.state] += item.observation_count;
+    });
+
+    // Sort and get top regions
+    const topRegions = Object.entries(regionCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    const totalObs = Object.values(regionCounts).reduce((a, b) => a + b, 0);
+
+    const regionTableBody = $('#top-regions-table tbody');
+    regionTableBody.empty();
+
+    topRegions.forEach(([region, count]) => {
+        const density = ((count / totalObs) * 100).toFixed(2);
+        regionTableBody.append(`
+            <tr>
+                <td>${region}</td>
+                <td>${count.toLocaleString()}</td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar"
+                             style="width: ${density}%;"
+                             aria-valuenow="${density}" aria-valuemin="0" aria-valuemax="100">
+                            ${density}%
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `);
+    });
+
+    // Calculate time period densities (by decade)
+    const periodCounts = {};
+    allData.forEach(item => {
+        const decade = Math.floor(item.year / 10) * 10;
+        const period = `${decade}s`;
+        if (!periodCounts[period]) {
+            periodCounts[period] = 0;
+        }
+        periodCounts[period] += item.observation_count;
+    });
+
+    // Sort and get top periods
+    const topPeriods = Object.entries(periodCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    const periodTableBody = $('#top-periods-table tbody');
+    periodTableBody.empty();
+
+    topPeriods.forEach(([period, count]) => {
+        const density = ((count / totalObs) * 100).toFixed(2);
+        periodTableBody.append(`
+            <tr>
+                <td>${period}</td>
+                <td>${count.toLocaleString()}</td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-info" role="progressbar"
+                             style="width: ${density}%;"
+                             aria-valuenow="${density}" aria-valuemin="0" aria-valuemax="100">
+                            ${density}%
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function renderMap() {
+    if (!detailedData) {
+        console.warn('No detailed data available for map');
+        return;
+    }
+
+    const yearStart = parseInt($('#year-start').val()) || null;
+    const yearEnd = parseInt($('#year-end').val()) || null;
+    const scaleType = $('#scale-type').val();
+    const dataSourceFilter = $('#data-source-filter').val();
+
+    console.log('Rendering map with filters:', {
+        yearStart,
+        yearEnd,
+        scaleType,
+        dataSourceFilter
+    });
+
+    // Filter data by year range and data source
+    let phenoData = [];
+    let phenoNewData = [];
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno') {
+        phenoData = detailedData.pheno.filter(d => {
+            const year = parseInt(d.reference_year);
+            if (yearStart && year < yearStart) return false;
+            if (yearEnd && year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno_new') {
+        phenoNewData = detailedData.pheno_new.filter(d => {
+            const year = parseInt(d.reference_year);
+            if (yearStart && year < yearStart) return false;
+            if (yearEnd && year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    console.log('Filtered data:', {
+        phenoData: phenoData.length,
+        phenoNewData: phenoNewData.length
+    });
+
+    // Aggregate by station
+    const stationData = {};
+
+    phenoData.forEach(item => {
+        const key = `pheno_${item.station_id}`;
+        if (!stationData[key]) {
+            stationData[key] = {
+                station_name: item.station_name,
+                latitude: parseFloat(item.latitude),
+                longitude: parseFloat(item.longitude),
+                count: 0,
+                source: 'pheno',
+                years: []
+            };
+        }
+        stationData[key].count += item.observation_count;
+        stationData[key].years.push(item.reference_year);
+    });
+
+    phenoNewData.forEach(item => {
+        const key = `pheno_new_${item.station_id}`;
+        if (!stationData[key]) {
+            stationData[key] = {
+                station_name: item.station_name,
+                latitude: parseFloat(item.latitude),
+                longitude: parseFloat(item.longitude),
+                count: 0,
+                source: 'pheno_new',
+                years: []
+            };
+        }
+        stationData[key].count += item.observation_count;
+        stationData[key].years.push(item.reference_year);
+    });
+
+    // Initialize map if not exists
+    if (!distributionMap) {
+        distributionMap = L.map('distribution-map').setView([51.1657, 10.4515], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(distributionMap);
+    } else {
+        // Clear existing markers
+        distributionMap.eachLayer(layer => {
+            if (layer instanceof L.CircleMarker) {
+                distributionMap.removeLayer(layer);
+            }
+        });
+    }
+
+    // Calculate max count for sizing
+    const counts = Object.values(stationData).map(s => s.count);
+    const maxCount = Math.max(...counts);
+    const minCount = Math.min(...counts);
+
+    // Add markers
+    const stations = Object.values(stationData);
+    console.log(`Adding ${stations.length} stations to map`);
+
+    const phenoStations = stations.filter(s => s.source === 'pheno');
+    const phenoNewStations = stations.filter(s => s.source === 'pheno_new');
+    console.log(`Pheno stations: ${phenoStations.length}, Pheno New stations: ${phenoNewStations.length}`);
+
+    stations.forEach(station => {
+        const normalizedSize = scaleType === 'log'
+            ? Math.log10(station.count + 1) / Math.log10(maxCount + 1)
+            : (station.count - minCount) / (maxCount - minCount || 1);
+
+        const radius = 3 + normalizedSize * 12; // 3-15px radius (smaller)
+
+        const color = station.source === 'pheno'
+            ? 'rgba(44, 82, 52, 0.4)'  // Green for pheno (lower opacity)
+            : 'rgba(23, 162, 184, 0.4)'; // Blue for pheno_new (lower opacity)
+
+        const yearRange = station.years.length > 0
+            ? `${Math.min(...station.years)} - ${Math.max(...station.years)}`
+            : 'N/A';
+
+        const circle = L.circleMarker([station.latitude, station.longitude], {
+            radius: radius,
+            fillColor: color,
+            color: color,  // Same color as fill (no visible border)
+            weight: 0,      // No border
+            opacity: 0,     // No border opacity
+            fillOpacity: 0.4  // Lower transparency
+        }).addTo(distributionMap);
+
+        circle.bindPopup(`
+            <div>
+                <h6>${station.station_name}</h6>
+                <p class="mb-1"><strong>Source:</strong> ${station.source === 'pheno' ? 'Pheno (Modern)' : 'Pheno New (Historical)'}</p>
+                <p class="mb-1"><strong>Total Observations:</strong> ${station.count.toLocaleString()}</p>
+                <p class="mb-1"><strong>Year Range:</strong> ${yearRange}</p>
+                <p class="mb-0"><strong>Location:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</p>
+            </div>
+        `);
+    });
+
+    console.log('Map rendering complete');
+}
+</script>
+{% endblock %}

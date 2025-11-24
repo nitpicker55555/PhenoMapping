@@ -1,0 +1,30 @@
+# Transcription files
+Transskriptionen/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Database
+*.db
+pheno_backup.sql
+pheno_new_backup.sql
+# But allow schema SQL files
+!create_indexes.sql
+!create_materialized_views.sql
+
+# Mac
+.DS_Store
+
+# Environment
+.env
+venv/
+env/
+
+# Deployment scripts (contain server info)
+deploy.sh
+import_db.sh
