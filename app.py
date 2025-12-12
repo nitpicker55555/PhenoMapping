@@ -1133,84 +1133,96 @@ def api_transcription_odt(folder_name, file_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/transcription/save/<path:folder_name>/<path:file_name>', methods=['POST'])
-def api_transcription_save(folder_name, file_name):
-    """Save ODT file content"""
+@app.route('/api/transcription/annotations/<path:folder_name>/<path:file_name>')
+def api_transcription_annotations(folder_name, file_name):
+    """Get annotations for a specific file"""
     try:
-        file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
-        if not file_path.exists():
-            return jsonify({'error': 'File not found'}), 404
-        
-        data = request.json
-        content = data.get('content', '')
-        table_data = data.get('tables', None)
-        
-        # Use ODTEditor to properly save the document
-        editor = ODTEditor(str(file_path))
-        editor.load()
-        
-        if table_data and len(table_data) > 0:
-            # Update tables if provided
-            for i, table in enumerate(table_data):
-                if i < len(editor.tables):
-                    editor.update_table_from_csv_data(i, table)
-        
-        # Save the document
-        editor.save()
-        
-        return jsonify({'success': True, 'message': 'File saved successfully'})
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor()
+
+        # Create table if not exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transcription_annotations (
+                id SERIAL PRIMARY KEY,
+                folder_name VARCHAR(500) NOT NULL,
+                file_name VARCHAR(500) NOT NULL,
+                annotation_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+        # Get annotations for this file
+        cursor.execute("""
+            SELECT id, folder_name, file_name, annotation_text, created_at
+            FROM transcription_annotations
+            WHERE folder_name = %s AND file_name = %s
+            ORDER BY created_at DESC
+        """, (folder_name, file_name))
+
+        annotations = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({'annotations': annotations})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/transcription/merge', methods=['POST'])
-def api_transcription_merge():
-    """Run data merge process"""
+@app.route('/api/transcription/annotations', methods=['POST'])
+def api_transcription_add_annotation():
+    """Add a new annotation"""
     try:
-        # Run the phenology data processor
-        # Use relative path for script
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'phenology_data_processor.py')
-        result = subprocess.run(
-            ['python3', script_path],
-            capture_output=True,
-            text=True
-        )
-        
-        if result.returncode != 0:
-            return jsonify({'error': f'Merge process failed: {result.stderr}'}), 500
-        
-        # Check if user wants to import to database
-        import_to_db = request.json.get('import_to_db', False)
-        import_output = ""
-        
-        if import_to_db:
-            # Run import script
-            import_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'import_to_pheno_new.py')
-            import_result = subprocess.run(
-                ['python3', import_script_path],
-                capture_output=True,
-                text=True
+        data = request.json
+        folder_name = data.get('folder_name')
+        file_name = data.get('file_name')
+        annotation_text = data.get('annotation_text')
+
+        if not folder_name or not file_name or not annotation_text:
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor()
+
+        # Create table if not exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transcription_annotations (
+                id SERIAL PRIMARY KEY,
+                folder_name VARCHAR(500) NOT NULL,
+                file_name VARCHAR(500) NOT NULL,
+                annotation_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            
-            if import_result.returncode != 0:
-                return jsonify({
-                    'success': True,
-                    'message': 'Data merged successfully but import failed',
-                    'merge_output': result.stdout,
-                    'import_error': import_result.stderr,
-                    'data_refreshed': False
-                })
-            
-            import_output = import_result.stdout
-            
+        """)
+
+        # Insert annotation
+        cursor.execute("""
+            INSERT INTO transcription_annotations (folder_name, file_name, annotation_text)
+            VALUES (%s, %s, %s)
+            RETURNING id, created_at
+        """, (folder_name, file_name, annotation_text))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
         return jsonify({
             'success': True,
-            'message': 'Data merged and imported successfully' if import_to_db else 'Data merged successfully',
-            'merge_output': result.stdout,
-            'import_output': import_output,
-            'data_refreshed': import_to_db
+            'message': 'Annotation added successfully',
+            'id': result[0],
+            'created_at': result[1].isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0',port=9090)

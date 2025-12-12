@@ -148,10 +148,51 @@
             padding: 1rem;
             overflow-y: auto;
         }
-        .tif-preview {
-            max-width: 100%;
-            height: auto;
+        .image-container {
+            position: relative;
+            overflow: auto;
             border: 1px solid #dee2e6;
+            background-color: #f5f5f5;
+            max-height: calc(100vh - 300px);
+        }
+        .tif-preview {
+            display: block;
+            margin: 0 auto;
+            cursor: grab;
+            transition: transform 0.1s;
+        }
+        .tif-preview:active {
+            cursor: grabbing;
+        }
+        .zoom-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            padding: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .zoom-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .zoom-btn:hover {
+            background-color: #2980b9;
+        }
+        .zoom-level {
+            display: inline-block;
+            margin: 0 5px;
+            font-size: 14px;
+            min-width: 50px;
+            text-align: center;
         }
         .table-preview table {
             font-size: 0.875rem;
@@ -179,21 +220,22 @@
             margin-bottom: 1rem;
         }
 
-        /* Status Indicators */
-        .save-status {
-            display: inline-block;
-            margin-left: 1rem;
-            font-size: 0.875rem;
+        /* Annotations */
+        .annotation-item {
+            background-color: #f8f9fa;
+            border-left: 3px solid #3498db;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
         }
-        .save-status.success {
-            color: #27ae60;
+        .annotation-text {
+            margin: 0;
+            color: #2c3e50;
         }
-        .save-status.error {
-            color: #e74c3c;
-        }
-        .loading-spinner {
-            display: none;
-            margin-left: 1rem;
+        .annotation-time {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -246,22 +288,6 @@
                 <div class="panel-content">
                     <div class="content-header">
                         <h5 class="mb-0" id="folder-name-left">No folder selected</h5>
-                        <div>
-                            <button class="btn btn-sm btn-primary" onclick="saveFile('left')">
-                                <i class="fas fa-save"></i> Save
-                            </button>
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
-                                    <i class="fas fa-sync"></i> Merge
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="#" onclick="runMerge(false)">Merge Only</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="runMerge(true)">Merge + Import</a></li>
-                                </ul>
-                            </div>
-                            <span class="save-status" id="status-left"></span>
-                            <div class="spinner-border spinner-border-sm loading-spinner" id="spinner-left"></div>
-                        </div>
                     </div>
                     <div class="file-tabs" id="file-tabs-left">
                         <!-- File tabs will be here -->
@@ -289,13 +315,6 @@
                 <div class="panel-content">
                     <div class="content-header">
                         <h5 class="mb-0" id="folder-name-right">No folder selected</h5>
-                        <div>
-                            <button class="btn btn-sm btn-primary" onclick="saveFile('right')">
-                                <i class="fas fa-save"></i> Save
-                            </button>
-                            <span class="save-status" id="status-right"></span>
-                            <div class="spinner-border spinner-border-sm loading-spinner" id="spinner-right"></div>
-                        </div>
                     </div>
                     <div class="file-tabs" id="file-tabs-right">
                         <!-- File tabs will be here -->
@@ -420,8 +439,36 @@
                 const folderName = panelState[panelId].folder;
                 contentArea.html(`
                     <h5>Scanned Image Preview</h5>
-                    <img class="tif-preview" src="/api/transcription/image/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}" alt="TIF preview">
+                    <div class="image-container" id="image-container-${panelId}">
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomImage('${panelId}', 'in')"><i class="fas fa-search-plus"></i></button>
+                            <span class="zoom-level" id="zoom-level-${panelId}">100%</span>
+                            <button class="zoom-btn" onclick="zoomImage('${panelId}', 'out')"><i class="fas fa-search-minus"></i></button>
+                            <button class="zoom-btn" onclick="zoomImage('${panelId}', 'reset')"><i class="fas fa-undo"></i></button>
+                        </div>
+                        <img class="tif-preview" id="tif-image-${panelId}" src="/api/transcription/image/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}" alt="TIF preview">
+                    </div>
+                    <div class="mt-3">
+                        <h6>Annotations</h6>
+                        <div id="annotations-${panelId}" class="mb-3">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            Loading annotations...
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="new-annotation-${panelId}" placeholder="Add a new annotation..." onkeypress="if(event.key==='Enter') addAnnotation('${panelId}')">
+                            <button class="btn btn-primary" onclick="addAnnotation('${panelId}')"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                    </div>
                 `);
+
+                // Initialize zoom state
+                panelState[panelId].zoom = { level: 1, x: 0, y: 0 };
+
+                // Enable image dragging
+                enableImageDragging(panelId);
+
+                // Load existing annotations
+                loadAnnotations(panelId, folderName, file.name);
             } else if (file.type === 'odt') {
                 loadOdtContent(panelId, file);
             }
@@ -430,18 +477,13 @@
         function loadOdtContent(panelId, file) {
             const folderName = panelState[panelId].folder;
 
-            $(`#spinner-${panelId}`).show();
-
             $.get(`/api/transcription/odt/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`, function(data) {
-                $(`#spinner-${panelId}`).hide();
-
                 panelState[panelId].tables = data.tables || [];
 
                 const contentArea = $(`#content-${panelId}`);
                 contentArea.empty();
 
                 let html = '<h5>ODT File Content</h5>';
-                html += '<div class="alert alert-info mb-3"><i class="fas fa-info-circle"></i> Click on cells to edit. Click Save when finished.</div>';
 
                 if (panelState[panelId].tables.length > 0) {
                     html += '<div class="table-preview">';
@@ -452,9 +494,7 @@
                             html += '<tr>';
                             row.forEach((cell, cIndex) => {
                                 const tag = rIndex === 0 ? 'th' : 'td';
-                                html += `<${tag} contenteditable="true"
-                                        data-row="${rIndex}" data-col="${cIndex}"
-                                        onblur="updateCell('${panelId}', ${tIndex}, ${rIndex}, ${cIndex}, this)">${cell || '-'}</${tag}>`;
+                                html += `<${tag}>${cell || '-'}</${tag}>`;
                             });
                             html += '</tr>';
                         });
@@ -467,65 +507,141 @@
 
                 html += `<div class="mt-3"><label>Raw Text:</label><textarea class="odt-editor" readonly>${data.raw_content}</textarea></div>`;
 
+                // Add annotations section
+                html += `
+                    <div class="mt-4">
+                        <h6>Annotations</h6>
+                        <div id="annotations-${panelId}" class="mb-3">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            Loading annotations...
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="new-annotation-${panelId}" placeholder="Add a new annotation..." onkeypress="if(event.key==='Enter') addAnnotation('${panelId}')">
+                            <button class="btn btn-primary" onclick="addAnnotation('${panelId}')"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                    </div>
+                `;
+
                 contentArea.html(html);
+
+                // Load existing annotations
+                loadAnnotations(panelId, folderName, file.name);
             });
         }
 
-        function updateCell(panelId, tableIndex, rowIndex, colIndex, element) {
-            if (!panelState[panelId].tables[tableIndex]) return;
-
-            const newValue = element.textContent;
-            panelState[panelId].tables[tableIndex][rowIndex][colIndex] = newValue;
-            $(element).css('background-color', '#fffacd');
-        }
-
-        function saveFile(panelId) {
+        function zoomImage(panelId, action) {
             const state = panelState[panelId];
-            if (!state.currentFile || state.currentFile.type !== 'odt') {
-                alert('Only ODT files can be saved');
-                return;
+            if (!state.zoom) state.zoom = { level: 1, x: 0, y: 0 };
+
+            const img = $(`#tif-image-${panelId}`);
+            let newLevel = state.zoom.level;
+
+            if (action === 'in') {
+                newLevel = Math.min(state.zoom.level + 0.2, 3);
+            } else if (action === 'out') {
+                newLevel = Math.max(state.zoom.level - 0.2, 0.5);
+            } else if (action === 'reset') {
+                newLevel = 1;
             }
 
-            $(`#spinner-${panelId}`).show();
-            $(`#status-${panelId}`).removeClass('success error').text('');
+            state.zoom.level = newLevel;
+            img.css('transform', `scale(${newLevel})`);
+            $(`#zoom-level-${panelId}`).text(Math.round(newLevel * 100) + '%');
+        }
 
-            const content = $(`#content-${panelId} .odt-editor`).val();
+        function enableImageDragging(panelId) {
+            const container = $(`#image-container-${panelId}`);
+            const img = $(`#tif-image-${panelId}`);
+            let isDragging = false;
+            let startX, startY, scrollLeft, scrollTop;
 
-            $.ajax({
-                url: `/api/transcription/save/${encodeURIComponent(state.folder)}/${encodeURIComponent(state.currentFile.name)}`,
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ content: content, tables: state.tables }),
-                success: function() {
-                    $(`#spinner-${panelId}`).hide();
-                    $(`#status-${panelId}`).addClass('success').text('Saved!');
-                    $(`#content-${panelId} [contenteditable]`).css('background-color', '');
-                    setTimeout(() => $(`#status-${panelId}`).text(''), 3000);
-                },
-                error: function(error) {
-                    $(`#spinner-${panelId}`).hide();
-                    $(`#status-${panelId}`).addClass('error').text('Save failed');
+            img.on('mousedown', function(e) {
+                isDragging = true;
+                startX = e.pageX - container.offset().left;
+                startY = e.pageY - container.offset().top;
+                scrollLeft = container.scrollLeft();
+                scrollTop = container.scrollTop();
+            });
+
+            $(document).on('mouseup', function() {
+                isDragging = false;
+            });
+
+            container.on('mousemove', function(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                const x = e.pageX - container.offset().left;
+                const y = e.pageY - container.offset().top;
+                const walkX = (x - startX) * 2;
+                const walkY = (y - startY) * 2;
+                container.scrollLeft(scrollLeft - walkX);
+                container.scrollTop(scrollTop - walkY);
+            });
+
+            // Mouse wheel zoom
+            container.on('wheel', function(e) {
+                e.preventDefault();
+                if (e.originalEvent.deltaY < 0) {
+                    zoomImage(panelId, 'in');
+                } else {
+                    zoomImage(panelId, 'out');
                 }
             });
         }
 
-        function runMerge(importToDb) {
-            if (!confirm('Run merge process?')) return;
+        function loadAnnotations(panelId, folderName, fileName) {
+            $.get(`/api/transcription/annotations/${encodeURIComponent(folderName)}/${encodeURIComponent(fileName)}`, function(data) {
+                const container = $(`#annotations-${panelId}`);
+                container.empty();
 
-            $('.loading-spinner').show();
+                if (data.annotations && data.annotations.length > 0) {
+                    data.annotations.forEach(ann => {
+                        const time = new Date(ann.created_at).toLocaleString();
+                        container.append(`
+                            <div class="annotation-item">
+                                <p class="annotation-text">${ann.annotation_text}</p>
+                                <div class="annotation-time"><i class="fas fa-clock"></i> ${time}</div>
+                            </div>
+                        `);
+                    });
+                } else {
+                    container.html('<p class="text-muted">No annotations yet.</p>');
+                }
+            }).fail(function() {
+                $(`#annotations-${panelId}`).html('<p class="text-danger">Failed to load annotations.</p>');
+            });
+        }
+
+        function addAnnotation(panelId) {
+            const state = panelState[panelId];
+            const input = $(`#new-annotation-${panelId}`);
+            const annotationText = input.val().trim();
+
+            if (!annotationText) {
+                alert('Please enter an annotation.');
+                return;
+            }
+
+            if (!state.folder || !state.currentFile) {
+                alert('No file selected.');
+                return;
+            }
 
             $.ajax({
-                url: '/api/transcription/merge',
+                url: '/api/transcription/annotations',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ import_to_db: importToDb }),
-                success: function(response) {
-                    $('.loading-spinner').hide();
-                    alert('Merge completed!\n' + response.merge_output);
+                data: JSON.stringify({
+                    folder_name: state.folder,
+                    file_name: state.currentFile.name,
+                    annotation_text: annotationText
+                }),
+                success: function() {
+                    input.val('');
+                    loadAnnotations(panelId, state.folder, state.currentFile.name);
                 },
                 error: function(error) {
-                    $('.loading-spinner').hide();
-                    alert('Merge failed: ' + error.responseJSON.error);
+                    alert('Failed to save annotation: ' + (error.responseJSON?.error || 'Unknown error'));
                 }
             });
         }
