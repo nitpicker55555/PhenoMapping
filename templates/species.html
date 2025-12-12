@@ -263,6 +263,7 @@ function loadSpeciesData() {
 
             // 先添加pheno species
             phenoSpecies.forEach(s => {
+                if (!s.species_name_en) return; // 跳过没有名称的species
                 const key = s.species_name_en.toLowerCase();
                 speciesMap.set(key, {
                     ...s,
@@ -273,6 +274,7 @@ function loadSpeciesData() {
 
             // 合并pheno_new species
             phenoNewSpecies.forEach(s => {
+                if (!s.species_name_en) return; // 跳过没有名称的species
                 const key = s.species_name_en.toLowerCase();
                 if (speciesMap.has(key)) {
                     // 已存在，更新
@@ -294,7 +296,7 @@ function loadSpeciesData() {
             });
 
             allSpecies = Array.from(speciesMap.values());
-            allSpeciesNew = phenoNewSpecies;
+            allSpeciesNew = phenoNewSpecies.filter(s => s && s.species_name_en); // 过滤掉无效数据
             currentSpecies = allSpecies;
 
             // 填充分组筛选器
@@ -351,6 +353,8 @@ function displayGrid(species) {
     }
 
     species.forEach(sp => {
+        if (!sp || !sp.species_name_en) return; // 跳过无效数据
+
         const observationCount = parseInt(sp.observation_count) || 0;
 
         // 构建数据源标识
@@ -371,13 +375,13 @@ function displayGrid(species) {
                 <div class="card species-card h-100" data-species-id="${sp.id}" style="cursor: pointer;">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title text-success mb-0">${sp.species_name_en}</h6>
+                            <h6 class="card-title text-success mb-0">${sp.species_name_en || 'Unknown'}</h6>
                             <div>${sourceBadges}</div>
                         </div>
                         <p class="card-text">
                             <small class="text-muted">
-                                <strong>German:</strong> ${sp.species_name_de}<br>
-                                <strong>Latin Name:</strong> <em>${sp.species_name_la}</em>
+                                <strong>German:</strong> ${sp.species_name_de || 'N/A'}<br>
+                                <strong>Latin Name:</strong> <em>${sp.species_name_la || 'N/A'}</em>
                             </small>
                         </p>
                         <div class="d-flex justify-content-between align-items-center">
@@ -412,6 +416,8 @@ function displayList(species) {
     }
 
     species.forEach(sp => {
+        if (!sp || !sp.species_name_en) return; // 跳过无效数据
+
         const observationCount = parseInt(sp.observation_count) || 0;
 
         // 构建数据源标识
@@ -430,11 +436,11 @@ function displayList(species) {
         tbody.append(`
             <tr style="cursor: pointer;" data-species-id="${sp.id}">
                 <td>
-                    <strong class="text-success">${sp.species_name_en}</strong>
+                    <strong class="text-success">${sp.species_name_en || 'Unknown'}</strong>
                     ${sourceBadges}
                 </td>
-                <td>${sp.species_name_de}</td>
-                <td><em>${sp.species_name_la}</em></td>
+                <td>${sp.species_name_de || 'N/A'}</td>
+                <td><em>${sp.species_name_la || 'N/A'}</em></td>
                 <td>
                     ${sp.group_name ? `<span class="badge bg-light text-dark">${sp.group_name}</span>` : '-'}
                 </td>
@@ -514,10 +520,12 @@ function filterSpecies() {
     const sourceData = currentDataSource === 'all' ? allSpecies : allSpeciesNew;
 
     let filtered = sourceData.filter(sp => {
+        if (!sp || !sp.species_name_en) return false; // 跳过无效数据
+
         const matchesSearch = !searchTerm ||
-            sp.species_name_en.toLowerCase().includes(searchTerm) ||
-            sp.species_name_de.toLowerCase().includes(searchTerm) ||
-            sp.species_name_la.toLowerCase().includes(searchTerm);
+            (sp.species_name_en && sp.species_name_en.toLowerCase().includes(searchTerm)) ||
+            (sp.species_name_de && sp.species_name_de.toLowerCase().includes(searchTerm)) ||
+            (sp.species_name_la && sp.species_name_la.toLowerCase().includes(searchTerm));
 
         const matchesGroup = !groupFilter || sp.group_name === groupFilter;
 
@@ -877,10 +885,12 @@ function filterSpeciesByPhase() {
     if (!phaseId) {
         // 如果没有选择phase，使用常规过滤
         currentSpecies = sourceData.filter(sp => {
+            if (!sp || !sp.species_name_en) return false; // 跳过无效数据
+
             const matchesSearch = !searchTerm ||
-                sp.species_name_en.toLowerCase().includes(searchTerm) ||
-                sp.species_name_de.toLowerCase().includes(searchTerm) ||
-                sp.species_name_la.toLowerCase().includes(searchTerm);
+                (sp.species_name_en && sp.species_name_en.toLowerCase().includes(searchTerm)) ||
+                (sp.species_name_de && sp.species_name_de.toLowerCase().includes(searchTerm)) ||
+                (sp.species_name_la && sp.species_name_la.toLowerCase().includes(searchTerm));
 
             const matchesGroup = !groupFilter || sp.group_name === groupFilter;
 
@@ -907,10 +917,12 @@ function filterSpeciesByPhase() {
 
                 // 应用搜索和分组过滤器
                 filtered = filtered.filter(sp => {
+                    if (!sp || !sp.species_name_en) return false; // 跳过无效数据
+
                     const matchesSearch = !searchTerm ||
-                        sp.species_name_en.toLowerCase().includes(searchTerm) ||
-                        sp.species_name_de.toLowerCase().includes(searchTerm) ||
-                        sp.species_name_la.toLowerCase().includes(searchTerm);
+                        (sp.species_name_en && sp.species_name_en.toLowerCase().includes(searchTerm)) ||
+                        (sp.species_name_de && sp.species_name_de.toLowerCase().includes(searchTerm)) ||
+                        (sp.species_name_la && sp.species_name_la.toLowerCase().includes(searchTerm));
 
                     const matchesGroup = !groupFilter || sp.group_name === groupFilter;
 
