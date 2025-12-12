@@ -26,13 +26,19 @@
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <label for="species-select" class="form-label">Select Species</label>
+                        <label for="species-select" class="form-label">
+                            Select Species
+                            <span class="badge bg-info ms-1" id="species-filter-badge" style="display: none;">Filtered</span>
+                        </label>
                         <select class="form-select" id="species-select" required>
                             <option value="">Please select species...</option>
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label for="phase-select" class="form-label">Select Phenological Phase</label>
+                        <label for="phase-select" class="form-label">
+                            Select Phenological Phase
+                            <span class="badge bg-info ms-1" id="phase-filter-badge" style="display: none;">Filtered</span>
+                        </label>
                         <select class="form-select" id="phase-select" required>
                             <option value="">Please select phenological phase...</option>
                         </select>
@@ -192,17 +198,42 @@
 <script>
 let currentTrendData = null;
 let currentObservationData = null;
+let allSpecies = []; // Store complete species list
+let allPhases = []; // Store complete phases list
 
 $(document).ready(function() {
     loadSpeciesData();
     loadPhasesData();
-    
+
+    // Add change event listeners for filtering
+    $('#species-select').change(function() {
+        const selectedSpeciesId = $(this).val();
+        if (selectedSpeciesId) {
+            filterPhasesBySpecies(selectedSpeciesId);
+        } else {
+            // If species is cleared, restore all phases
+            populatePhaseSelect(allPhases);
+            $('#phase-filter-badge').hide();
+        }
+    });
+
+    $('#phase-select').change(function() {
+        const selectedPhaseId = $(this).val();
+        if (selectedPhaseId) {
+            filterSpeciesByPhase(selectedPhaseId);
+        } else {
+            // If phase is cleared, restore all species
+            populateSpeciesSelect(allSpecies);
+            $('#species-filter-badge').hide();
+        }
+    });
+
     // Analysis button event
     $('#analyze-btn').click(performAnalysis);
-    
+
     // Export data event
     $('#export-data').click(exportData);
-    
+
     // Check URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const stationId = urlParams.get('station');
@@ -215,14 +246,8 @@ $(document).ready(function() {
 function loadSpeciesData() {
     $.get('/api/species')
         .done(function(species) {
-            const select = $('#species-select');
-            species.forEach(function(sp) {
-                select.append(`
-                    <option value="${sp.id}" data-name="${sp.species_name_en}">
-                        ${sp.species_name_en} (${sp.species_name_de})
-                    </option>
-                `);
-            });
+            allSpecies = species; // Save complete list
+            populateSpeciesSelect(species);
         })
         .fail(function() {
             alert('Failed to load species data');
@@ -232,17 +257,93 @@ function loadSpeciesData() {
 function loadPhasesData() {
     $.get('/api/phases')
         .done(function(phases) {
-            const select = $('#phase-select');
-            phases.forEach(function(phase) {
-                select.append(`
-                    <option value="${phase.id}" data-name="${phase.phase_name_en}">
-                        ${phase.phase_name_en} (${phase.phase_name_de})
-                    </option>
-                `);
-            });
+            allPhases = phases; // Save complete list
+            populatePhaseSelect(phases);
         })
         .fail(function() {
             alert('Failed to load phenological phase data');
+        });
+}
+
+function populateSpeciesSelect(species) {
+    const select = $('#species-select');
+    const currentValue = select.val(); // Save current selection
+    select.find('option:not(:first)').remove(); // Clear all except the first option
+
+    species.forEach(function(sp) {
+        select.append(`
+            <option value="${sp.id}" data-name="${sp.species_name_en}">
+                ${sp.species_name_en} (${sp.species_name_de})
+            </option>
+        `);
+    });
+
+    // Restore selection if it still exists in the filtered list
+    if (currentValue && select.find(`option[value="${currentValue}"]`).length > 0) {
+        select.val(currentValue);
+    }
+}
+
+function populatePhaseSelect(phases) {
+    const select = $('#phase-select');
+    const currentValue = select.val(); // Save current selection
+    select.find('option:not(:first)').remove(); // Clear all except the first option
+
+    phases.forEach(function(phase) {
+        // Handle both phase.id and phase.phase_id (different API response formats)
+        const phaseId = phase.id || phase.phase_id;
+        select.append(`
+            <option value="${phaseId}" data-name="${phase.phase_name_en}">
+                ${phase.phase_name_en} (${phase.phase_name_de})
+            </option>
+        `);
+    });
+
+    // Restore selection if it still exists in the filtered list
+    if (currentValue && select.find(`option[value="${currentValue}"]`).length > 0) {
+        select.val(currentValue);
+    }
+}
+
+function filterPhasesBySpecies(speciesId) {
+    // Get available phases for selected species
+    $.get(`/api/species-phases/${speciesId}`)
+        .done(function(phases) {
+            if (phases.length === 0) {
+                // If no data, show message but keep the dropdown enabled
+                $('#phase-select').html('<option value="">No phenological phases available for this species</option>');
+                $('#phase-filter-badge').hide();
+            } else {
+                populatePhaseSelect(phases);
+                $('#phase-filter-badge').show();
+                console.log(`Filtered to ${phases.length} phenological phases with data`);
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter phases by species');
+            populatePhaseSelect(allPhases);
+            $('#phase-filter-badge').hide();
+        });
+}
+
+function filterSpeciesByPhase(phaseId) {
+    // Get available species for selected phase
+    $.get('/api/species-by-phase', { phase_id: phaseId })
+        .done(function(species) {
+            if (species.length === 0) {
+                // If no data, show message but keep the dropdown enabled
+                $('#species-select').html('<option value="">No species available for this phenological phase</option>');
+                $('#species-filter-badge').hide();
+            } else {
+                populateSpeciesSelect(species);
+                $('#species-filter-badge').show();
+                console.log(`Filtered to ${species.length} species with data`);
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter species by phase');
+            populateSpeciesSelect(allSpecies);
+            $('#species-filter-badge').hide();
         });
 }
 
