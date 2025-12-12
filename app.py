@@ -309,34 +309,46 @@ def api_trends():
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor = conn.cursor()
-        
+
         species_id = request.args.get('species_id')
         phase_id = request.args.get('phase_id')
-        
+        station_id = request.args.get('station_id')
+
         if not species_id or not phase_id:
             return jsonify({'error': 'species_id and phase_id are required'}), 400
-        
-        cursor.execute("""
-            SELECT 
+
+        # Build query with optional station filter
+        query = """
+            SELECT
                 reference_year,
                 AVG(CAST(day_of_year AS INTEGER)) as avg_day_of_year,
                 COUNT(*) as observation_count
             FROM dwd_observation
             WHERE species_id = %s AND phase_id = %s
+        """
+        params = [species_id, phase_id]
+
+        if station_id:
+            query += " AND station_id = %s"
+            params.append(station_id)
+
+        query += """
             GROUP BY reference_year
             ORDER BY reference_year
-        """, (species_id, phase_id))
-        
+        """
+
+        cursor.execute(query, params)
+
         trends = dict_fetchall(cursor)
-        
+
         cursor.close()
         conn.close()
-        
+
         return jsonify(trends)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -436,10 +448,10 @@ def api_species_phases(species_id):
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-    
+
     try:
         cursor = conn.cursor()
-        
+
         # 获取该species的所有phases及其观测统计
         cursor.execute("""
             SELECT DISTINCT
@@ -456,14 +468,289 @@ def api_species_phases(species_id):
             GROUP BY p.id, p.phase_name_de, p.phase_name_en
             ORDER BY observation_count DESC
         """, (species_id,))
-        
+
         phases = dict_fetchall(cursor)
-        
+
         cursor.close()
         conn.close()
-        
+
         return jsonify(phases)
-        
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/station-species')
+def api_station_species():
+    """获取指定站点的所有物种"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        station_id = request.args.get('station_id')
+        if not station_id:
+            return jsonify({'error': 'station_id is required'}), 400
+
+        cursor.execute("""
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            WHERE o.station_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """, (station_id,))
+
+        species = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(species)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/station-phases')
+def api_station_phases():
+    """获取指定站点的所有物候期"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        station_id = request.args.get('station_id')
+        if not station_id:
+            return jsonify({'error': 'station_id is required'}), 400
+
+        cursor.execute("""
+            SELECT DISTINCT
+                p.id, p.phase_name_de, p.phase_name_en,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE o.station_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """, (station_id,))
+
+        phases = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(phases)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/station-species-phases')
+def api_station_species_phases():
+    """获取指定站点和物种的所有物候期"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        station_id = request.args.get('station_id')
+        species_id = request.args.get('species_id')
+
+        if not station_id or not species_id:
+            return jsonify({'error': 'station_id and species_id are required'}), 400
+
+        cursor.execute("""
+            SELECT DISTINCT
+                p.id as phase_id,
+                p.phase_name_de,
+                p.phase_name_en,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE o.station_id = %s AND o.species_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """, (station_id, species_id))
+
+        phases = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(phases)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/station-phase-species')
+def api_station_phase_species():
+    """获取指定站点和物候期的所有物种"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        station_id = request.args.get('station_id')
+        phase_id = request.args.get('phase_id')
+
+        if not station_id or not phase_id:
+            return jsonify({'error': 'station_id and phase_id are required'}), 400
+
+        cursor.execute("""
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_species s ON o.species_id = s.id
+            WHERE o.station_id = %s AND o.phase_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """, (station_id, phase_id))
+
+        species = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(species)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/species-stations')
+def api_species_stations():
+    """获取有指定物种观测数据的所有站点"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        species_id = request.args.get('species_id')
+        phase_id = request.args.get('phase_id')
+
+        if not species_id:
+            return jsonify({'error': 'species_id is required'}), 400
+
+        query = """
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_station st ON o.station_id = st.id
+            WHERE o.species_id = %s
+        """
+        params = [species_id]
+
+        if phase_id:
+            query += " AND o.phase_id = %s"
+            params.append(phase_id)
+
+        query += """
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """
+
+        cursor.execute(query, params)
+        stations = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(stations)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/phase-stations')
+def api_phase_stations():
+    """获取有指定物候期观测数据的所有站点"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        phase_id = request.args.get('phase_id')
+        species_id = request.args.get('species_id')
+
+        if not phase_id:
+            return jsonify({'error': 'phase_id is required'}), 400
+
+        query = """
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_station st ON o.station_id = st.id
+            WHERE o.phase_id = %s
+        """
+        params = [phase_id]
+
+        if species_id:
+            query += " AND o.species_id = %s"
+            params.append(species_id)
+
+        query += """
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """
+
+        cursor.execute(query, params)
+        stations = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(stations)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/species-phase-stations')
+def api_species_phase_stations():
+    """获取有指定物种和物候期观测数据的所有站点"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        species_id = request.args.get('species_id')
+        phase_id = request.args.get('phase_id')
+
+        if not species_id or not phase_id:
+            return jsonify({'error': 'species_id and phase_id are required'}), 400
+
+        cursor.execute("""
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN dwd_station st ON o.station_id = st.id
+            WHERE o.species_id = %s AND o.phase_id = %s
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """, (species_id, phase_id))
+
+        stations = dict_fetchall(cursor)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(stations)
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

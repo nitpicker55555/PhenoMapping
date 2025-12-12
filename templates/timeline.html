@@ -17,14 +17,29 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
                     <i class="fas fa-sliders-h me-2"></i>
                     Analysis Parameter Settings
                 </h5>
+                <div id="station-info-badge" style="display: none;">
+                    <span class="badge bg-primary">
+                        <i class="fas fa-map-marker-alt me-1"></i>
+                        Station: <span id="station-name-display"></span>
+                    </span>
+                </div>
             </div>
             <div class="card-body">
                 <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="station-select" class="form-label">
+                            Select Station (Optional)
+                            <span class="badge bg-info ms-1" id="station-filter-badge" style="display: none;">Filtered</span>
+                        </label>
+                        <select class="form-select" id="station-select">
+                            <option value="">All stations...</option>
+                        </select>
+                    </div>
                     <div class="col-md-3">
                         <label for="species-select" class="form-label">
                             Select Species
@@ -43,17 +58,24 @@
                             <option value="">Please select phenological phase...</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-3">
                         <label for="year-start" class="form-label">Start Year</label>
                         <input type="number" class="form-control" id="year-start" min="1953" max="2023" value="2000">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label for="year-end" class="form-label">End Year</label>
                         <input type="number" class="form-control" id="year-end" min="1953" max="2023" value="2023">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <button class="btn btn-primary w-100 mt-4" id="analyze-btn">
                             <i class="fas fa-play me-2"></i>Start Analysis
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-secondary w-100 mt-4" id="clear-filters-btn">
+                            <i class="fas fa-undo me-2"></i>Clear Filters
                         </button>
                     </div>
                 </div>
@@ -200,32 +222,181 @@ let currentTrendData = null;
 let currentObservationData = null;
 let allSpecies = []; // Store complete species list
 let allPhases = []; // Store complete phases list
+let allStations = []; // Store complete stations list
+let currentStationId = null; // Store current station ID from URL
 
 $(document).ready(function() {
+    // Check URL parameters first
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlStationId = urlParams.get('station');
+
+    // Load all initial data
+    loadStationsData();
     loadSpeciesData();
     loadPhasesData();
 
-    // Add change event listeners for filtering
+    // If URL has station parameter, preselect it
+    if (urlStationId) {
+        setTimeout(function() {
+            $('#station-select').val(urlStationId);
+            currentStationId = urlStationId;
+            // Find station name and update badge
+            const station = allStations.find(s => s.id == urlStationId);
+            if (station) {
+                $('#station-name-display').text(station.station_name);
+                $('#station-info-badge').show();
+            }
+            $('#station-select').trigger('change');
+        }, 500);
+    }
+
+    // Add change event listeners for three-way filtering
+    $('#station-select').change(function() {
+        const selectedStationId = $(this).val();
+        currentStationId = selectedStationId || null;
+
+        // Update station info badge
+        if (selectedStationId) {
+            const station = allStations.find(s => s.id == selectedStationId);
+            if (station) {
+                $('#station-name-display').text(station.station_name);
+                $('#station-info-badge').show();
+            }
+        } else {
+            $('#station-info-badge').hide();
+        }
+
+        const selectedSpeciesId = $('#species-select').val();
+        const selectedPhaseId = $('#phase-select').val();
+
+        if (selectedStationId) {
+            // Station selected - filter species and phases
+            if (selectedSpeciesId && selectedPhaseId) {
+                // All three selected - filter based on all three
+                applyTripleFilter(selectedStationId, selectedSpeciesId, selectedPhaseId);
+            } else if (selectedSpeciesId) {
+                // Station + Species selected - filter phases
+                filterPhasesByStationAndSpecies(selectedStationId, selectedSpeciesId);
+                filterStationsBySpecies(selectedSpeciesId, selectedPhaseId);
+            } else if (selectedPhaseId) {
+                // Station + Phase selected - filter species
+                filterSpeciesByStationAndPhase(selectedStationId, selectedPhaseId);
+                filterStationsByPhase(selectedPhaseId, selectedSpeciesId);
+            } else {
+                // Only station selected - filter both
+                filterSpeciesByStation(selectedStationId);
+                filterPhasesByStation(selectedStationId);
+            }
+            $('#station-filter-badge').hide();
+        } else {
+            // Station cleared
+            $('#station-filter-badge').hide();
+            if (selectedSpeciesId) {
+                filterPhasesBySpecies(selectedSpeciesId);
+                filterStationsBySpecies(selectedSpeciesId, selectedPhaseId);
+            } else if (selectedPhaseId) {
+                filterSpeciesByPhase(selectedPhaseId);
+                filterStationsByPhase(selectedPhaseId, selectedSpeciesId);
+            } else {
+                // Everything cleared
+                populateSpeciesSelect(allSpecies);
+                populatePhaseSelect(allPhases);
+                populateStationSelect(allStations);
+                $('#species-filter-badge').hide();
+                $('#phase-filter-badge').hide();
+            }
+        }
+    });
+
     $('#species-select').change(function() {
         const selectedSpeciesId = $(this).val();
+        const selectedStationId = $('#station-select').val();
+        const selectedPhaseId = $('#phase-select').val();
+
         if (selectedSpeciesId) {
-            filterPhasesBySpecies(selectedSpeciesId);
+            if (selectedStationId && selectedPhaseId) {
+                // All three selected
+                applyTripleFilter(selectedStationId, selectedSpeciesId, selectedPhaseId);
+            } else if (selectedStationId) {
+                // Station + Species selected - filter phases
+                filterPhasesByStationAndSpecies(selectedStationId, selectedSpeciesId);
+                filterStationsBySpecies(selectedSpeciesId, selectedPhaseId);
+            } else if (selectedPhaseId) {
+                // Species + Phase selected - filter stations
+                filterStationsBySpeciesAndPhase(selectedSpeciesId, selectedPhaseId);
+            } else {
+                // Only species selected
+                filterPhasesBySpecies(selectedSpeciesId);
+                filterStationsBySpecies(selectedSpeciesId, null);
+            }
         } else {
-            // If species is cleared, restore all phases
-            populatePhaseSelect(allPhases);
-            $('#phase-filter-badge').hide();
+            // Species cleared
+            $('#species-filter-badge').hide();
+            if (selectedStationId) {
+                filterPhasesByStation(selectedStationId);
+                filterStationsByPhase(selectedPhaseId, null);
+            } else if (selectedPhaseId) {
+                filterStationsByPhase(selectedPhaseId, null);
+            } else {
+                populatePhaseSelect(allPhases);
+                populateStationSelect(allStations);
+                $('#phase-filter-badge').hide();
+                $('#station-filter-badge').hide();
+            }
         }
     });
 
     $('#phase-select').change(function() {
         const selectedPhaseId = $(this).val();
+        const selectedStationId = $('#station-select').val();
+        const selectedSpeciesId = $('#species-select').val();
+
         if (selectedPhaseId) {
-            filterSpeciesByPhase(selectedPhaseId);
+            if (selectedStationId && selectedSpeciesId) {
+                // All three selected
+                applyTripleFilter(selectedStationId, selectedSpeciesId, selectedPhaseId);
+            } else if (selectedStationId) {
+                // Station + Phase selected - filter species
+                filterSpeciesByStationAndPhase(selectedStationId, selectedPhaseId);
+                filterStationsByPhase(selectedPhaseId, selectedSpeciesId);
+            } else if (selectedSpeciesId) {
+                // Species + Phase selected - filter stations
+                filterStationsBySpeciesAndPhase(selectedSpeciesId, selectedPhaseId);
+            } else {
+                // Only phase selected
+                filterSpeciesByPhase(selectedPhaseId);
+                filterStationsByPhase(selectedPhaseId, null);
+            }
         } else {
-            // If phase is cleared, restore all species
-            populateSpeciesSelect(allSpecies);
-            $('#species-filter-badge').hide();
+            // Phase cleared
+            $('#phase-filter-badge').hide();
+            if (selectedStationId) {
+                filterSpeciesByStation(selectedStationId);
+                filterStationsBySpecies(selectedSpeciesId, null);
+            } else if (selectedSpeciesId) {
+                filterStationsBySpecies(selectedSpeciesId, null);
+            } else {
+                populateSpeciesSelect(allSpecies);
+                populateStationSelect(allStations);
+                $('#species-filter-badge').hide();
+                $('#station-filter-badge').hide();
+            }
         }
+    });
+
+    // Clear filters button
+    $('#clear-filters-btn').click(function() {
+        $('#station-select').val('');
+        $('#species-select').val('');
+        $('#phase-select').val('');
+        currentStationId = null;
+        populateStationSelect(allStations);
+        populateSpeciesSelect(allSpecies);
+        populatePhaseSelect(allPhases);
+        $('#station-filter-badge').hide();
+        $('#species-filter-badge').hide();
+        $('#phase-filter-badge').hide();
+        $('#station-info-badge').hide();
     });
 
     // Analysis button event
@@ -233,15 +404,18 @@ $(document).ready(function() {
 
     // Export data event
     $('#export-data').click(exportData);
-
-    // Check URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const stationId = urlParams.get('station');
-    if (stationId) {
-        // If there is a station parameter, preselect data related to that station
-        console.log('Preselected station ID:', stationId);
-    }
 });
+
+function loadStationsData() {
+    $.get('/api/stations')
+        .done(function(stations) {
+            allStations = stations;
+            populateStationSelect(stations);
+        })
+        .fail(function() {
+            alert('Failed to load stations data');
+        });
+}
 
 function loadSpeciesData() {
     $.get('/api/species')
@@ -263,6 +437,24 @@ function loadPhasesData() {
         .fail(function() {
             alert('Failed to load phenological phase data');
         });
+}
+
+function populateStationSelect(stations) {
+    const select = $('#station-select');
+    const currentValue = select.val();
+    select.find('option:not(:first)').remove();
+
+    stations.forEach(function(station) {
+        select.append(`
+            <option value="${station.id}">
+                ${station.station_name} (${station.state || ''})
+            </option>
+        `);
+    });
+
+    if (currentValue && select.find(`option[value="${currentValue}"]`).length > 0) {
+        select.val(currentValue);
+    }
 }
 
 function populateSpeciesSelect(species) {
@@ -347,28 +539,167 @@ function filterSpeciesByPhase(phaseId) {
         });
 }
 
+// New three-way filtering functions
+function applyTripleFilter(stationId, speciesId, phaseId) {
+    // When all three are selected, just show badges
+    $('#station-filter-badge').show();
+    $('#species-filter-badge').show();
+    $('#phase-filter-badge').show();
+}
+
+// Station filtering functions
+function filterSpeciesByStation(stationId) {
+    $.get('/api/station-species', { station_id: stationId })
+        .done(function(species) {
+            if (species.length === 0) {
+                $('#species-select').html('<option value="">No species available for this station</option>');
+            } else {
+                populateSpeciesSelect(species);
+                $('#species-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter species by station');
+        });
+}
+
+function filterPhasesByStation(stationId) {
+    $.get('/api/station-phases', { station_id: stationId })
+        .done(function(phases) {
+            if (phases.length === 0) {
+                $('#phase-select').html('<option value="">No phases available for this station</option>');
+            } else {
+                populatePhaseSelect(phases);
+                $('#phase-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter phases by station');
+        });
+}
+
+function filterPhasesByStationAndSpecies(stationId, speciesId) {
+    $.get('/api/station-species-phases', {
+        station_id: stationId,
+        species_id: speciesId
+    })
+        .done(function(phases) {
+            if (phases.length === 0) {
+                $('#phase-select').html('<option value="">No phases available</option>');
+            } else {
+                populatePhaseSelect(phases);
+                $('#phase-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter phases');
+        });
+}
+
+function filterSpeciesByStationAndPhase(stationId, phaseId) {
+    $.get('/api/station-phase-species', {
+        station_id: stationId,
+        phase_id: phaseId
+    })
+        .done(function(species) {
+            if (species.length === 0) {
+                $('#species-select').html('<option value="">No species available</option>');
+            } else {
+                populateSpeciesSelect(species);
+                $('#species-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter species');
+        });
+}
+
+// Species and Phase filtering stations
+function filterStationsBySpecies(speciesId, phaseId) {
+    const params = { species_id: speciesId };
+    if (phaseId) params.phase_id = phaseId;
+
+    $.get('/api/species-stations', params)
+        .done(function(stations) {
+            if (stations.length === 0) {
+                $('#station-select').html('<option value="">No stations available</option>');
+            } else {
+                populateStationSelect(stations);
+                $('#station-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter stations by species');
+        });
+}
+
+function filterStationsByPhase(phaseId, speciesId) {
+    const params = { phase_id: phaseId };
+    if (speciesId) params.species_id = speciesId;
+
+    $.get('/api/phase-stations', params)
+        .done(function(stations) {
+            if (stations.length === 0) {
+                $('#station-select').html('<option value="">No stations available</option>');
+            } else {
+                populateStationSelect(stations);
+                $('#station-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter stations by phase');
+        });
+}
+
+function filterStationsBySpeciesAndPhase(speciesId, phaseId) {
+    $.get('/api/species-phase-stations', {
+        species_id: speciesId,
+        phase_id: phaseId
+    })
+        .done(function(stations) {
+            if (stations.length === 0) {
+                $('#station-select').html('<option value="">No stations available</option>');
+            } else {
+                populateStationSelect(stations);
+                $('#station-filter-badge').show();
+            }
+        })
+        .fail(function() {
+            console.error('Failed to filter stations');
+        });
+}
+
 function performAnalysis() {
+    const stationId = $('#station-select').val();
     const speciesId = $('#species-select').val();
     const phaseId = $('#phase-select').val();
     const yearStart = $('#year-start').val();
     const yearEnd = $('#year-end').val();
-    
+
     if (!speciesId || !phaseId) {
         alert('Please select species and phenological phase');
         return;
     }
-    
+
     // Show loading status
     $('#analyze-btn').html('<div class="spinner-border spinner-border-sm me-2"></div>Analyzing...');
     $('#analyze-btn').prop('disabled', true);
-    
-    // Get trend data
-    $.get('/api/trends', {
+
+    // Prepare query parameters
+    const queryParams = {
         species_id: speciesId,
         phase_id: phaseId,
         year_start: yearStart,
         year_end: yearEnd
-    })
+    };
+
+    // Add station_id if a station is selected
+    if (stationId) {
+        queryParams.station_id = stationId;
+    }
+
+    // Get trend data
+    $.get('/api/trends', queryParams)
     .done(function(data) {
         currentTrendData = data;
         displayTrendAnalysis(data);
@@ -655,13 +986,21 @@ function detectAnomalies(data) {
 }
 
 function loadObservationData(speciesId, phaseId, yearStart, yearEnd) {
-    $.get('/api/observations', {
+    const stationId = $('#station-select').val();
+    const queryParams = {
         species_id: speciesId,
         phase_id: phaseId,
         year_start: yearStart,
         year_end: yearEnd,
         limit: 500
-    })
+    };
+
+    // Add station_id if a station is selected
+    if (stationId) {
+        queryParams.station_id = stationId;
+    }
+
+    $.get('/api/observations', queryParams)
     .done(function(data) {
         currentObservationData = data;
         updateObservationTable(data);
