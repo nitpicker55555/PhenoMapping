@@ -372,7 +372,7 @@ function displayGrid(species) {
 
         grid.append(`
             <div class="col-md-4 col-sm-6 mb-3">
-                <div class="card species-card h-100" data-species-id="${sp.id}" style="cursor: pointer;">
+                <div class="card species-card h-100" data-species-id="${sp.id || sp.species_id}" style="cursor: pointer;">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <h6 class="card-title text-success mb-0">${sp.species_name_en || 'Unknown'}</h6>
@@ -399,10 +399,22 @@ function displayGrid(species) {
     // 添加点击事件
     $('.species-card').click(function() {
         const speciesId = $(this).data('species-id');
-        const species = currentDataSource === 'all' ?
-            allSpecies.find(s => s.id == speciesId) :
-            allSpeciesNew.find(s => s.species_id == speciesId);
-        showSpeciesDetail(species);
+        let species;
+
+        if (currentDataSource === 'all') {
+            // For merged data, try both id and species_id
+            species = allSpecies.find(s => s.id == speciesId || s.species_id == speciesId);
+        } else {
+            // For new pheno data, try both id and species_id
+            species = allSpeciesNew.find(s => s.id == speciesId || s.species_id == speciesId);
+        }
+
+        if (species) {
+            showSpeciesDetail(species);
+        } else {
+            console.error('Species not found:', speciesId);
+            alert('Species data not found. Please try again.');
+        }
     });
 }
 
@@ -434,7 +446,7 @@ function displayList(species) {
         }
 
         tbody.append(`
-            <tr style="cursor: pointer;" data-species-id="${sp.id}">
+            <tr style="cursor: pointer;" data-species-id="${sp.id || sp.species_id}">
                 <td>
                     <strong class="text-success">${sp.species_name_en || 'Unknown'}</strong>
                     ${sourceBadges}
@@ -446,7 +458,7 @@ function displayList(species) {
                 </td>
                 <td>${observationCount.toLocaleString()}</td>
                 <td>
-                    <button class="btn btn-outline-primary btn-sm species-detail-btn" data-species-id="${sp.id}">
+                    <button class="btn btn-outline-primary btn-sm species-detail-btn" data-species-id="${sp.id || sp.species_id}">
                         <i class="fas fa-eye"></i>
                     </button>
                 </td>
@@ -457,10 +469,22 @@ function displayList(species) {
     // 添加点击事件
     $('#species-table-body tr').click(function() {
         const speciesId = $(this).data('species-id');
-        const species = currentDataSource === 'all' ?
-            allSpecies.find(s => s.id == speciesId) :
-            allSpeciesNew.find(s => s.species_id == speciesId);
-        showSpeciesDetail(species);
+        let species;
+
+        if (currentDataSource === 'all') {
+            // For merged data, try both id and species_id
+            species = allSpecies.find(s => s.id == speciesId || s.species_id == speciesId);
+        } else {
+            // For new pheno data, try both id and species_id
+            species = allSpeciesNew.find(s => s.id == speciesId || s.species_id == speciesId);
+        }
+
+        if (species) {
+            showSpeciesDetail(species);
+        } else {
+            console.error('Species not found:', speciesId);
+            alert('Species data not found. Please try again.');
+        }
     });
 }
 
@@ -602,23 +626,30 @@ function switchDataSource() {
 }
 
 function showSpeciesDetail(species) {
+    // 验证species数据
+    if (!species || !species.species_name_en) {
+        console.error('Invalid species data:', species);
+        alert('Invalid species data. Please try again.');
+        return;
+    }
+
     selectedSpecies = species;
-    
+
     // 更新模态框标题
     $('#modal-species-title').html(`
         <i class="fas fa-leaf me-2"></i>
-        ${species.species_name_en}
+        ${species.species_name_en || 'Unknown Species'}
     `);
-    
+
     // 更新基本信息
     $('#modal-species-info').html(`
         <div class="mb-3">
             <h6 class="text-primary">Species Name</h6>
-            <p class="mb-1"><strong>English: </strong> ${species.species_name_en}</p>
-            <p class="mb-1"><strong>German: </strong> ${species.species_name_de}</p>
-            <p class="mb-0"><strong>Latin Name: </strong> <em>${species.species_name_la}</em></p>
+            <p class="mb-1"><strong>English: </strong> ${species.species_name_en || 'N/A'}</p>
+            <p class="mb-1"><strong>German: </strong> ${species.species_name_de || 'N/A'}</p>
+            <p class="mb-0"><strong>Latin Name: </strong> <em>${species.species_name_la || 'N/A'}</em></p>
         </div>
-        
+
         <div class="mb-3">
             <h6 class="text-success">Classification Information</h6>
             <p class="mb-0">
@@ -627,7 +658,7 @@ function showSpeciesDetail(species) {
                 </span>
             </p>
         </div>
-        
+
         <div>
             <h6 class="text-info">Observation Overview</h6>
             <p class="mb-0">
@@ -637,10 +668,16 @@ function showSpeciesDetail(species) {
             </p>
         </div>
     `);
-    
+
+
     // 加载该Species的详细数据
-    loadSpeciesDetailData(species.id);
-    
+    const speciesIdToLoad = species.id || species.species_id;
+    if (speciesIdToLoad) {
+        loadSpeciesDetailData(speciesIdToLoad);
+    } else {
+        console.error('No valid species ID found');
+    }
+
     // 显示模态框
     $('#speciesModal').modal('show');
 }
