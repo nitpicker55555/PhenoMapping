@@ -37,8 +37,20 @@
             <div class="card-body">
                 <!-- Search Filters -->
                 <div class="row mb-2">
-                    <div class="col-12">
+                    <div class="col-md-8">
                         <small class="text-muted">Filter species by name, group, or phenological phase:</small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="data-source" id="data-source-all" value="all" checked>
+                            <label class="btn btn-outline-primary" for="data-source-all">
+                                <i class="fas fa-database me-1"></i>All Data
+                            </label>
+                            <input type="radio" class="btn-check" name="data-source" id="data-source-new" value="new">
+                            <label class="btn btn-outline-success" for="data-source-new">
+                                <i class="fas fa-plus-circle me-1"></i>New Pheno Only
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="row mb-3">
@@ -200,41 +212,127 @@
 {% block extra_js %}
 <script>
 let allSpecies = [];
+let allSpeciesNew = [];
 let currentSpecies = [];
 let selectedSpecies = null;
 let modalMap = null;
+let currentDataSource = 'all';
 
 $(document).ready(function() {
     loadSpeciesData();
     loadPhasesData();
-    
+
     // 事件绑定
     $('#species-search').on('input', filterSpecies);
     $('#group-filter').change(filterSpecies);
     $('#phase-filter').change(filterSpeciesByPhase);
     $('#sort-by').change(sortSpecies);
     $('input[name="view-type"]').change(toggleView);
+    $('input[name="data-source"]').change(switchDataSource);
     $('#view-species-timeline').click(viewSpeciesTimeline);
 });
 
 function loadSpeciesData() {
-    $.get('/api/species')
-        .done(function(species) {
-            allSpecies = species;
-            currentSpecies = species;
-            
+    // 加载pheno数据库的species
+    const phenoRequest = $.get('/api/species');
+
+    // 加载pheno_new数据库的species
+    const phenoNewRequest = $.get('/api/pheno-new/species');
+
+    $.when(phenoRequest, phenoNewRequest)
+        .done(function(phenoData, phenoNewData) {
+            const phenoSpecies = phenoData[0];
+            const phenoNewSpecies = phenoNewData[0];
+
+            // 标记pheno species
+            phenoSpecies.forEach(s => {
+                s.source = 'pheno';
+                s.is_in_pheno = true;
+                s.is_in_pheno_new = false;
+            });
+
+            // 标记pheno_new species
+            phenoNewSpecies.forEach(s => {
+                s.source = 'pheno_new';
+                s.is_in_pheno = s.exists_in_pheno === true;
+                s.is_in_pheno_new = true;
+            });
+
+            // 合并species（去重）
+            const speciesMap = new Map();
+
+            // 先添加pheno species
+            phenoSpecies.forEach(s => {
+                const key = s.species_name_en.toLowerCase();
+                speciesMap.set(key, {
+                    ...s,
+                    pheno_observation_count: s.observation_count || 0,
+                    pheno_new_observation_count: 0
+                });
+            });
+
+            // 合并pheno_new species
+            phenoNewSpecies.forEach(s => {
+                const key = s.species_name_en.toLowerCase();
+                if (speciesMap.has(key)) {
+                    // 已存在，更新
+                    const existing = speciesMap.get(key);
+                    existing.is_in_pheno_new = true;
+                    existing.pheno_new_observation_count = s.observation_count || 0;
+                    existing.observation_count = existing.pheno_observation_count + existing.pheno_new_observation_count;
+                    existing.locations = s.locations || existing.locations;
+                } else {
+                    // 新species（只在pheno_new中）
+                    speciesMap.set(key, {
+                        ...s,
+                        is_in_pheno: false,
+                        is_in_pheno_new: true,
+                        pheno_observation_count: 0,
+                        pheno_new_observation_count: s.observation_count || 0
+                    });
+                }
+            });
+
+            allSpecies = Array.from(speciesMap.values());
+            allSpeciesNew = phenoNewSpecies;
+            currentSpecies = allSpecies;
+
             // 填充分组筛选器
-            const groups = [...new Set(species.map(s => s.group_name).filter(g => g))];
+            const groups = [...new Set(allSpecies.map(s => s.group_name).filter(g => g))];
             groups.sort();
             groups.forEach(group => {
                 $('#group-filter').append(`<option value="${group}">${group}</option>`);
             });
-            
-            displaySpecies(species);
-            createGroupsChart(species);
+
+            displaySpecies(allSpecies);
+            createGroupsChart(allSpecies);
         })
         .fail(function() {
-            alert('Failed to load species');
+            // 如果pheno_new加载失败，至少加载pheno数据
+            $.get('/api/species')
+                .done(function(species) {
+                    allSpecies = species.map(s => ({
+                        ...s,
+                        source: 'pheno',
+                        is_in_pheno: true,
+                        is_in_pheno_new: false,
+                        pheno_observation_count: s.observation_count || 0,
+                        pheno_new_observation_count: 0
+                    }));
+                    currentSpecies = allSpecies;
+
+                    const groups = [...new Set(allSpecies.map(s => s.group_name).filter(g => g))];
+                    groups.sort();
+                    groups.forEach(group => {
+                        $('#group-filter').append(`<option value="${group}">${group}</option>`);
+                    });
+
+                    displaySpecies(allSpecies);
+                    createGroupsChart(allSpecies);
+                })
+                .fail(function() {
+                    alert('Failed to load species');
+                });
         });
 }
 
@@ -246,20 +344,36 @@ function displaySpecies(species) {
 function displayGrid(species) {
     const grid = $('#species-grid');
     grid.empty();
-    
+
     if (species.length === 0) {
         grid.html('<div class="col-12 text-center text-muted">No species found matching the criteria</div>');
         return;
     }
-    
+
     species.forEach(sp => {
         const observationCount = parseInt(sp.observation_count) || 0;
-        
+
+        // 构建数据源标识
+        let sourceBadges = '';
+        if (sp.is_in_pheno && sp.is_in_pheno_new) {
+            sourceBadges = `
+                <span class="badge bg-primary me-1" title="In Pheno DB">P</span>
+                <span class="badge bg-success" title="In Pheno New DB">N</span>
+            `;
+        } else if (sp.is_in_pheno_new) {
+            sourceBadges = `<span class="badge bg-success" title="New Pheno Data Only">New</span>`;
+        } else if (sp.is_in_pheno) {
+            sourceBadges = `<span class="badge bg-primary" title="Pheno DB Only">Pheno</span>`;
+        }
+
         grid.append(`
             <div class="col-md-4 col-sm-6 mb-3">
                 <div class="card species-card h-100" data-species-id="${sp.id}" style="cursor: pointer;">
                     <div class="card-body">
-                        <h6 class="card-title text-success">${sp.species_name_en}</h6>
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title text-success mb-0">${sp.species_name_en}</h6>
+                            <div>${sourceBadges}</div>
+                        </div>
                         <p class="card-text">
                             <small class="text-muted">
                                 <strong>German:</strong> ${sp.species_name_de}<br>
@@ -270,18 +384,20 @@ function displayGrid(species) {
                             <small class="text-muted">
                                 ${sp.group_name ? `<span class="badge bg-light text-dark">${sp.group_name}</span>` : ''}
                             </small>
-                            <span class="badge bg-primary">${observationCount.toLocaleString()}</span>
+                            <span class="badge bg-info">${observationCount.toLocaleString()}</span>
                         </div>
                     </div>
                 </div>
             </div>
         `);
     });
-    
+
     // 添加点击事件
     $('.species-card').click(function() {
         const speciesId = $(this).data('species-id');
-        const species = allSpecies.find(s => s.id == speciesId);
+        const species = currentDataSource === 'all' ?
+            allSpecies.find(s => s.id == speciesId) :
+            allSpeciesNew.find(s => s.species_id == speciesId);
         showSpeciesDetail(species);
     });
 }
@@ -289,18 +405,34 @@ function displayGrid(species) {
 function displayList(species) {
     const tbody = $('#species-table-body');
     tbody.empty();
-    
+
     if (species.length === 0) {
         tbody.html('<tr><td colspan="6" class="text-center text-muted">No species found matching the criteria</td></tr>');
         return;
     }
-    
+
     species.forEach(sp => {
         const observationCount = parseInt(sp.observation_count) || 0;
-        
+
+        // 构建数据源标识
+        let sourceBadges = '';
+        if (sp.is_in_pheno && sp.is_in_pheno_new) {
+            sourceBadges = `
+                <span class="badge bg-primary me-1" title="In Pheno DB">P</span>
+                <span class="badge bg-success" title="In Pheno New DB">N</span>
+            `;
+        } else if (sp.is_in_pheno_new) {
+            sourceBadges = `<span class="badge bg-success" title="New Pheno Data Only">New</span>`;
+        } else if (sp.is_in_pheno) {
+            sourceBadges = `<span class="badge bg-primary" title="Pheno DB Only">Pheno</span>`;
+        }
+
         tbody.append(`
             <tr style="cursor: pointer;" data-species-id="${sp.id}">
-                <td><strong class="text-success">${sp.species_name_en}</strong></td>
+                <td>
+                    <strong class="text-success">${sp.species_name_en}</strong>
+                    ${sourceBadges}
+                </td>
                 <td>${sp.species_name_de}</td>
                 <td><em>${sp.species_name_la}</em></td>
                 <td>
@@ -315,11 +447,13 @@ function displayList(species) {
             </tr>
         `);
     });
-    
+
     // 添加点击事件
     $('#species-table-body tr').click(function() {
         const speciesId = $(this).data('species-id');
-        const species = allSpecies.find(s => s.id == speciesId);
+        const species = currentDataSource === 'all' ?
+            allSpecies.find(s => s.id == speciesId) :
+            allSpeciesNew.find(s => s.species_id == speciesId);
         showSpeciesDetail(species);
     });
 }
@@ -368,18 +502,28 @@ function createGroupsChart(species) {
 function filterSpecies() {
     const searchTerm = $('#species-search').val().toLowerCase();
     const groupFilter = $('#group-filter').val();
-    
-    let filtered = allSpecies.filter(sp => {
-        const matchesSearch = !searchTerm || 
+    const phaseFilter = $('#phase-filter').val();
+
+    // If phase filter is selected, use filterSpeciesByPhase instead
+    if (phaseFilter) {
+        filterSpeciesByPhase();
+        return;
+    }
+
+    // 根据当前数据源选择要过滤的数据
+    const sourceData = currentDataSource === 'all' ? allSpecies : allSpeciesNew;
+
+    let filtered = sourceData.filter(sp => {
+        const matchesSearch = !searchTerm ||
             sp.species_name_en.toLowerCase().includes(searchTerm) ||
             sp.species_name_de.toLowerCase().includes(searchTerm) ||
             sp.species_name_la.toLowerCase().includes(searchTerm);
-            
+
         const matchesGroup = !groupFilter || sp.group_name === groupFilter;
-        
+
         return matchesSearch && matchesGroup;
     });
-    
+
     currentSpecies = filtered;
     sortSpecies();
 }
@@ -406,6 +550,47 @@ function toggleView() {
         $('#species-grid').hide();
         $('#species-list').show();
     }
+}
+
+function switchDataSource() {
+    const dataSource = $('input[name="data-source"]:checked').val();
+    currentDataSource = dataSource;
+
+    // 清空过滤器
+    $('#species-search').val('');
+    $('#group-filter').val('');
+    $('#phase-filter').val('');
+
+    if (dataSource === 'all') {
+        // 显示所有数据（pheno + pheno_new合并）
+        currentSpecies = allSpecies;
+
+        // 更新分组筛选器
+        $('#group-filter').empty().append('<option value="">All Groups</option>');
+        const groups = [...new Set(allSpecies.map(s => s.group_name).filter(g => g))];
+        groups.sort();
+        groups.forEach(group => {
+            $('#group-filter').append(`<option value="${group}">${group}</option>`);
+        });
+
+        sortSpecies();
+    } else if (dataSource === 'new') {
+        // 只显示new pheno data
+        currentSpecies = allSpeciesNew;
+
+        // 更新分组筛选器（只包含new pheno的分组）
+        $('#group-filter').empty().append('<option value="">All Groups</option>');
+        const groups = [...new Set(allSpeciesNew.map(s => s.group_name).filter(g => g))];
+        groups.sort();
+        groups.forEach(group => {
+            $('#group-filter').append(`<option value="${group}">${group}</option>`);
+        });
+
+        sortSpecies();
+    }
+
+    // 更新统计图表
+    createGroupsChart(currentSpecies);
 }
 
 function showSpeciesDetail(species) {
@@ -683,42 +868,79 @@ function loadPhasesData() {
 // 根据phase筛选species
 function filterSpeciesByPhase() {
     const phaseId = $('#phase-filter').val();
-    
+    const searchTerm = $('#species-search').val().toLowerCase();
+    const groupFilter = $('#group-filter').val();
+
+    // 根据当前数据源选择要过滤的数据
+    const sourceData = currentDataSource === 'all' ? allSpecies : allSpeciesNew;
+
     if (!phaseId) {
-        // 如果没有选择phase，显示所有species
-        currentSpecies = allSpecies;
+        // 如果没有选择phase，使用常规过滤
+        currentSpecies = sourceData.filter(sp => {
+            const matchesSearch = !searchTerm ||
+                sp.species_name_en.toLowerCase().includes(searchTerm) ||
+                sp.species_name_de.toLowerCase().includes(searchTerm) ||
+                sp.species_name_la.toLowerCase().includes(searchTerm);
+
+            const matchesGroup = !groupFilter || sp.group_name === groupFilter;
+
+            return matchesSearch && matchesGroup;
+        });
         sortSpecies();
+
+        // 恢复默认提示
+        $('#species-info').html('<p class="text-muted text-center">Click on a species card to view detailed information</p>');
         return;
     }
-    
-    // 根据phase获取species
-    $.get('/api/species-by-phase', { phase_id: phaseId })
-        .done(function(species) {
-            // 合并species信息
-            const speciesMap = new Map(allSpecies.map(s => [s.id, s]));
-            
-            currentSpecies = species.map(s => ({
-                ...speciesMap.get(s.id),
-                ...s
-            }));
-            
-            displaySpecies(currentSpecies);
-            
-            // 更新species信息显示
-            if (species.length > 0) {
-                $('#species-info').html(`
-                    <p class="mb-2"><strong>Species with selected phase:</strong> ${species.length}</p>
-                    <p class="mb-0 text-muted small">Click on a species card to view detailed information</p>
-                `);
-            } else {
-                $('#species-info').html('<p class="text-muted text-center">No species found with the selected phase</p>');
-            }
-        })
-        .fail(function() {
-            console.error('Failed to filter species by phase');
-            currentSpecies = allSpecies;
-            sortSpecies();
-        });
+
+    // 根据phase获取species（仅对pheno数据库有效）
+    if (currentDataSource === 'all') {
+        $.get('/api/species-by-phase', { phase_id: phaseId })
+            .done(function(species) {
+                // 合并species信息
+                const speciesMap = new Map(allSpecies.map(s => [s.id, s]));
+
+                let filtered = species.map(s => ({
+                    ...speciesMap.get(s.id),
+                    ...s
+                }));
+
+                // 应用搜索和分组过滤器
+                filtered = filtered.filter(sp => {
+                    const matchesSearch = !searchTerm ||
+                        sp.species_name_en.toLowerCase().includes(searchTerm) ||
+                        sp.species_name_de.toLowerCase().includes(searchTerm) ||
+                        sp.species_name_la.toLowerCase().includes(searchTerm);
+
+                    const matchesGroup = !groupFilter || sp.group_name === groupFilter;
+
+                    return matchesSearch && matchesGroup;
+                });
+
+                currentSpecies = filtered;
+                sortSpecies();
+
+                // 更新species信息显示
+                if (filtered.length > 0) {
+                    $('#species-info').html(`
+                        <p class="mb-2"><strong>Species with selected phase:</strong> ${filtered.length}</p>
+                        <p class="mb-0 text-muted small">Click on a species card to view detailed information</p>
+                    `);
+                } else {
+                    $('#species-info').html('<p class="text-muted text-center">No species found matching all filters</p>');
+                }
+            })
+            .fail(function() {
+                console.error('Failed to filter species by phase');
+                currentSpecies = allSpecies;
+                sortSpecies();
+            });
+    } else {
+        // For new pheno data, phase filter is not supported
+        alert('Phase filtering is not available for New Pheno Data. Please switch to "All Data" mode.');
+        $('#phase-filter').val('');
+        filterSpecies();
+    }
 }
 </script>
 {% endblock %}
