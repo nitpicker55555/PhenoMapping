@@ -653,11 +653,34 @@ function renderMonthlyChart() {
     const phenoMonthlyDist = distributionData.pheno.month_distribution || [];
     const phenoNewMonthlyDist = distributionData.pheno_new.month_distribution || [];
     const scaleType = $('#scale-type').val();
+    const dataSourceFilter = $('#data-source-filter').val();
+    const yearStart = parseInt($('#year-start').val()) || null;
+    const yearEnd = parseInt($('#year-end').val()) || null;
 
-    // Combine all years from both databases
+    // Filter data based on year range and data source
+    let filteredPhenoMonthly = [];
+    let filteredPhenoNewMonthly = [];
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno') {
+        filteredPhenoMonthly = phenoMonthlyDist.filter(d => {
+            if (yearStart && d.year < yearStart) return false;
+            if (yearEnd && d.year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno_new') {
+        filteredPhenoNewMonthly = phenoNewMonthlyDist.filter(d => {
+            if (yearStart && d.year < yearStart) return false;
+            if (yearEnd && d.year > yearEnd) return false;
+            return true;
+        });
+    }
+
+    // Combine all years from filtered datasets
     const allYears = [...new Set([
-        ...phenoMonthlyDist.map(d => d.year),
-        ...phenoNewMonthlyDist.map(d => d.year)
+        ...filteredPhenoMonthly.map(d => d.year),
+        ...filteredPhenoNewMonthly.map(d => d.year)
     ])].sort();
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -674,45 +697,51 @@ function renderMonthlyChart() {
     ];
 
     // Pheno datasets (stacked)
-    for (let month = 1; month <= 12; month++) {
-        const data = allYears.map(year => {
-            const item = phenoMonthlyDist.find(d => d.year === year && d.month === month);
-            if (!item) return null;
-            const value = scaleType === 'log' && item.observation_count > 0
-                ? Math.log10(item.observation_count + 1)
-                : item.observation_count;
-            return value;
-        });
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno') {
+        for (let month = 1; month <= 12; month++) {
+            const data = allYears.map(year => {
+                const item = filteredPhenoMonthly.find(d => d.year === year && d.month === month);
+                if (!item) return null;
+                const value = scaleType === 'log' && item.observation_count > 0
+                    ? Math.log10(item.observation_count + 1)
+                    : item.observation_count;
+                return value;
+            });
 
-        datasets.push({
-            label: `${months[month - 1]} (Pheno)`,
-            data: data,
-            backgroundColor: greenColors[month - 1],
-            borderColor: greenColors[month - 1],
-            borderWidth: 1,
-            stack: 'pheno'
-        });
+            datasets.push({
+                label: `${months[month - 1]} (Pheno)`,
+                data: data,
+                backgroundColor: greenColors[month - 1],
+                borderColor: greenColors[month - 1],
+                borderWidth: 1,
+                stack: 'pheno',
+                barPercentage: 0.8
+            });
+        }
     }
 
     // Pheno New datasets (stacked separately)
-    for (let month = 1; month <= 12; month++) {
-        const data = allYears.map(year => {
-            const item = phenoNewMonthlyDist.find(d => d.year === year && d.month === month);
-            if (!item) return null;
-            const value = scaleType === 'log' && item.observation_count > 0
-                ? Math.log10(item.observation_count + 1)
-                : item.observation_count;
-            return value;
-        });
+    if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno_new') {
+        for (let month = 1; month <= 12; month++) {
+            const data = allYears.map(year => {
+                const item = filteredPhenoNewMonthly.find(d => d.year === year && d.month === month);
+                if (!item) return null;
+                const value = scaleType === 'log' && item.observation_count > 0
+                    ? Math.log10(item.observation_count + 1)
+                    : item.observation_count;
+                return value;
+            });
 
-        datasets.push({
-            label: `${months[month - 1]} (New)`,
-            data: data,
-            backgroundColor: blueColors[month - 1],
-            borderColor: blueColors[month - 1],
-            borderWidth: 1,
-            stack: 'pheno_new'
-        });
+            datasets.push({
+                label: `${months[month - 1]} (New)`,
+                data: data,
+                backgroundColor: blueColors[month - 1],
+                borderColor: blueColors[month - 1],
+                borderWidth: 1,
+                stack: 'pheno_new',
+                barPercentage: 0.8
+            });
+        }
     }
 
     const ctx = document.getElementById('monthly-chart').getContext('2d');
@@ -747,19 +776,24 @@ function renderMonthlyChart() {
             },
             scales: {
                 x: {
+                    stacked: true,
                     ticks: {
                         autoSkip: true,
                         maxTicksLimit: 20
                     }
                 },
                 y: {
+                    stacked: true,
                     beginAtZero: true,
                     title: {
                         display: true,
                         text: scaleType === 'log' ? 'Log10(Observations + 1)' : 'Observations'
                     }
                 }
-            }
+            },
+            // Add spacing between different stacks
+            categoryPercentage: dataSourceFilter === 'both' ? 0.7 : 0.9,
+            barPercentage: 0.9
         }
     });
 }

@@ -2,6 +2,22 @@
 
 {% block title %}Home - Plant Phenology Observation Data Visualization Platform{% endblock %}
 
+{% block extra_css %}
+<style>
+.update-chart-btn {
+    min-width: 70px;
+    height: 31px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    border-radius: 0.2rem;
+    font-weight: 400;
+    text-align: center;
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -131,10 +147,6 @@
                             <i class="fas fa-search me-1"></i>
                             Species Explorer
                         </a>
-                        <a href="/quality" class="btn btn-outline-warning btn-sm">
-                            <i class="fas fa-shield-alt me-1"></i>
-                            Quality Monitor
-                        </a>
                         <a href="/distribution" class="btn btn-outline-info btn-sm">
                             <i class="fas fa-th me-1"></i>
                             Data Distribution
@@ -236,12 +248,12 @@
                 <!-- Charts Section -->
                 <div class="row mb-4">
                     <!-- Pheno New Chart -->
-                    <div class="col-md-6">
-                        <div class="card">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
                             <div class="card-header bg-primary text-white">
                                 <h6 class="mb-0">Pheno New Database Trends</h6>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body d-flex flex-column">
                                 <div class="mb-3">
                                     <label class="form-label">Time Range:</label>
                                     <div class="row g-2">
@@ -252,24 +264,24 @@
                                             <input type="number" class="form-control form-control-sm" id="phenoNewEndYear" placeholder="End Year" min="1800" max="2100">
                                         </div>
                                         <div class="col-auto">
-                                            <button class="btn btn-sm btn-primary" onclick="updatePhenoNewChart()">Update</button>
+                                            <button class="btn btn-primary btn-sm update-chart-btn" onclick="updatePhenoNewChart()">Update</button>
                                         </div>
                                     </div>
                                 </div>
-                                <div style="height: 300px; position: relative;">
+                                <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoNewChart"></canvas>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Pheno Chart -->
-                    <div class="col-md-6">
-                        <div class="card">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
                             <div class="card-header bg-success text-white">
                                 <h6 class="mb-0">Pheno Database Trends</h6>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body d-flex flex-column">
                                 <div class="mb-3">
                                     <label class="form-label">Time Range:</label>
                                     <div class="row g-2">
@@ -280,11 +292,11 @@
                                             <input type="number" class="form-control form-control-sm" id="phenoEndYear" placeholder="End Year" min="1800" max="2100">
                                         </div>
                                         <div class="col-auto">
-                                            <button class="btn btn-sm btn-success" onclick="updatePhenoChart()">Update</button>
+                                            <button class="btn btn-success btn-sm update-chart-btn" onclick="updatePhenoChart()">Update</button>
                                         </div>
                                     </div>
                                 </div>
-                                <div style="height: 300px; position: relative;">
+                                <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoChart"></canvas>
                                 </div>
                             </div>
@@ -292,24 +304,42 @@
                     </div>
                 </div>
                 
-                <!-- Phases List Section -->
+                <!-- Phases Histogram Section -->
                 <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-primary">Pheno New Database Details</h6>
-                        <div id="phenoNewPhasesContent">
-                            <div class="spinner-border spinner-border-sm" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">Pheno New Database Details</h6>
                             </div>
-                            Loading...
+                            <div class="card-body">
+                                <div id="phenoNewPhasesContent">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading...
+                                </div>
+                                <div style="height: 300px; position: relative; display: none;" id="phenoNewHistogramContainer">
+                                    <canvas id="phenoNewHistogram"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <h6 class="text-success">Pheno Database Details</h6>
-                        <div id="phenoPhasesContent">
-                            <div class="spinner-border spinner-border-sm" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">Pheno Database Details</h6>
                             </div>
-                            Loading...
+                            <div class="card-body">
+                                <div id="phenoPhasesContent">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading...
+                                </div>
+                                <div style="height: 300px; position: relative; display: none;" id="phenoHistogramContainer">
+                                    <canvas id="phenoHistogram"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -323,6 +353,8 @@
 <script>
 let phenoNewChartInstance = null;
 let phenoChartInstance = null;
+let phenoNewHistogramInstance = null;
+let phenoHistogramInstance = null;
 let currentPhenoData = null;
 
 $(document).ready(function() {
@@ -347,6 +379,14 @@ $(document).ready(function() {
         if (phenoChartInstance) {
             phenoChartInstance.destroy();
             phenoChartInstance = null;
+        }
+        if (phenoNewHistogramInstance) {
+            phenoNewHistogramInstance.destroy();
+            phenoNewHistogramInstance = null;
+        }
+        if (phenoHistogramInstance) {
+            phenoHistogramInstance.destroy();
+            phenoHistogramInstance = null;
         }
         currentPhenoData = null;
     });
@@ -524,63 +564,35 @@ function viewSpeciesPhases(speciesName) {
     // Load phases data
     $.get('/api/pheno-new/species-phases/' + encodeURIComponent(speciesName))
         .done(function(data) {
-            // Display pheno_new phases
-            let newPhasesHtml = '';
+            console.log('Pheno New Phases Data:', data.pheno_new_phases);
+            console.log('Pheno Phases Data:', data.pheno_phases);
+
+            // Display pheno_new phases histogram
             if (data.pheno_new_phases.length > 0) {
-                newPhasesHtml = '<ul class="list-group">';
-                data.pheno_new_phases.forEach(function(phase) {
-                    newPhasesHtml += `
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>${phase.phase_name_en || phase.phase_name_de || 'N/A'}</strong><br>
-                                    <small class="text-muted">
-                                        ${phase.start_date ? 'Start: ' + phase.start_date : ''}
-                                        ${phase.end_date ? ' End: ' + phase.end_date : ''}
-                                    </small>
-                                </div>
-                                <span class="badge bg-primary">${phase.observation_count}</span>
-                            </div>
-                        </li>
-                    `;
-                });
-                newPhasesHtml += '</ul>';
+                $('#phenoNewPhasesContent').hide();
+                $('#phenoNewHistogramContainer').show();
+                createPhenoNewHistogram(data.pheno_new_phases);
             } else {
-                newPhasesHtml = '<p class="text-muted">No phases found in pheno_new database</p>';
+                $('#phenoNewHistogramContainer').hide();
+                $('#phenoNewPhasesContent').html('<p class="text-muted">No phases found in pheno_new database</p>').show();
             }
-            $('#phenoNewPhasesContent').html(newPhasesHtml);
-            
-            // Display pheno phases
-            let phenoPhasesHtml = '';
+
+            // Display pheno phases histogram
             if (data.pheno_phases.length > 0) {
-                phenoPhasesHtml = '<ul class="list-group">';
-                data.pheno_phases.forEach(function(phase) {
-                    phenoPhasesHtml += `
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>${phase.phase_name_en || phase.phase_name_de}</strong><br>
-                                    <small class="text-muted">
-                                        Avg Day: ${Math.round(phase.avg_day_of_year)}
-                                    </small>
-                                </div>
-                                <span class="badge bg-success">${phase.observation_count}</span>
-                            </div>
-                        </li>
-                    `;
-                });
-                phenoPhasesHtml += '</ul>';
-                
+                let matchInfo = '';
                 if (data.pheno_species_matches.length > 0) {
-                    phenoPhasesHtml = '<div class="alert alert-info mb-2"><small>Matched as: ' + 
+                    matchInfo = '<div class="alert alert-info mb-2"><small>Matched as: ' +
                         data.pheno_species_matches.map(m => m.species_name_de || m.species_name_en || m.species_name_la).join(', ') +
-                        '</small></div>' + phenoPhasesHtml;
+                        '</small></div>';
                 }
+                $('#phenoPhasesContent').html(matchInfo).show();
+                $('#phenoHistogramContainer').show();
+                createPhenoHistogram(data.pheno_phases);
             } else {
-                phenoPhasesHtml = '<p class="text-muted">No phases found in pheno database</p>';
+                $('#phenoHistogramContainer').hide();
+                $('#phenoPhasesContent').html('<p class="text-muted">No phases found in pheno database</p>').show();
             }
-            $('#phenoPhasesContent').html(phenoPhasesHtml);
-            
+
             // Store data and create charts
             currentPhenoData = data;
             createPhenologyCharts(data);
@@ -911,11 +923,168 @@ function updatePhenoNewChart() {
 
 function updatePhenoChart() {
     if (!currentPhenoData) return;
-    
+
     const startYear = parseInt($('#phenoStartYear').val()) || null;
     const endYear = parseInt($('#phenoEndYear').val()) || null;
-    
+
     createPhenoChart(currentPhenoData, startYear, endYear);
+}
+
+function createPhenoNewHistogram(phasesData) {
+    const ctx = document.getElementById('phenoNewHistogram').getContext('2d');
+
+    // Destroy existing chart
+    if (phenoNewHistogramInstance) {
+        phenoNewHistogramInstance.destroy();
+    }
+
+    // Prepare data
+    const labels = phasesData.map(phase => phase.phase_name_en || phase.phase_name_de || 'N/A');
+    const observationCounts = phasesData.map(phase => parseInt(phase.observation_count));
+
+    // Create histogram
+    phenoNewHistogramInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Observation Count',
+                data: observationCounts,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Phases Distribution in Pheno New Database'
+                },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const phase = phasesData[context.dataIndex];
+                            let info = '';
+                            if (phase.start_date) {
+                                info += '\nStart: ' + phase.start_date;
+                            }
+                            if (phase.end_date) {
+                                info += '\nEnd: ' + phase.end_date;
+                            }
+                            return info;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Observations'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Phenological Phase'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createPhenoHistogram(phasesData) {
+    const ctx = document.getElementById('phenoHistogram').getContext('2d');
+
+    // Destroy existing chart
+    if (phenoHistogramInstance) {
+        phenoHistogramInstance.destroy();
+    }
+
+    // Prepare data
+    const labels = phasesData.map(phase => phase.phase_name_en || phase.phase_name_de || 'N/A');
+    const observationCounts = phasesData.map(phase => parseInt(phase.observation_count));
+
+    // Create histogram
+    phenoHistogramInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Observation Count',
+                data: observationCounts,
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Phases Distribution in Pheno Database'
+                },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const phase = phasesData[context.dataIndex];
+                            let info = '';
+                            if (phase.avg_day_of_year) {
+                                info += '\nAvg Day of Year: ' + Math.round(phase.avg_day_of_year);
+                            }
+                            return info;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Observations'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Phenological Phase'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
 }
 </script>
 {% endblock %}

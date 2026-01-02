@@ -14,6 +14,16 @@ from PIL import Image
 import io
 from odt_editor import ODTEditor
 from geocoder import geocode_location
+import unicodedata
+
+# Load city to state mapping for pheno_new historical data
+CITY_STATE_MAPPING = {}
+mapping_file = os.path.join(os.path.dirname(__file__), 'static', 'city_to_state_mapping.json')
+if os.path.exists(mapping_file):
+    with open(mapping_file, 'r', encoding='utf-8') as f:
+        raw_mapping = json.load(f)
+        # Normalize keys to NFC form for consistent matching
+        CITY_STATE_MAPPING = {unicodedata.normalize('NFC', k): v for k, v in raw_mapping.items()}
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -837,6 +847,7 @@ def api_pheno_new_species_phases(species_name):
         cursor = conn.cursor()
         
         # 获取pheno_new中该物种的物候期数据
+        # 使用子查询避免species表重复记录导致的重复计数
         cursor_new.execute("""
             SELECT DISTINCT
                 p.id as phase_id,
@@ -846,9 +857,13 @@ def api_pheno_new_species_phases(species_name):
                 MIN(o.date) as start_date,
                 MAX(o.date) as end_date
             FROM dwd_observation o
-            JOIN dwd_species s ON o.species_id = s.id
             JOIN dwd_phase p ON o.phase_id = p.id
-            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
+            WHERE o.species_id IN (
+                SELECT DISTINCT id FROM dwd_species
+                WHERE species_name_en = %s
+                   OR species_name_la = %s
+                   OR species_name_de = %s
+            )
             GROUP BY p.id, p.phase_name_en, p.phase_name_de
             ORDER BY p.phase_name_en
         """, (species_name, species_name, species_name))
@@ -856,17 +871,22 @@ def api_pheno_new_species_phases(species_name):
         new_phases = dict_fetchall(cursor_new)
         
         # 获取pheno_new中的时间序列数据 - 按月份显示1856年数据
+        # 使用子查询避免species表重复记录导致的重复计数
         cursor_new.execute("""
-            SELECT 
+            SELECT
                 p.phase_name_en,
                 p.phase_name_de,
                 CAST(o.reference_year AS INTEGER) + (EXTRACT(MONTH FROM o.date::date) - 1) / 12.0 as year,
                 AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
                 COUNT(o.id) as observation_count
             FROM dwd_observation o
-            JOIN dwd_species s ON o.species_id = s.id
             JOIN dwd_phase p ON o.phase_id = p.id
-            WHERE (s.species_name_en = %s OR s.species_name_la = %s OR s.species_name_de = %s)
+            WHERE o.species_id IN (
+                SELECT DISTINCT id FROM dwd_species
+                WHERE species_name_en = %s
+                   OR species_name_la = %s
+                   OR species_name_de = %s
+            )
                 AND o.date IS NOT NULL
             GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year, EXTRACT(MONTH FROM o.date::date)
             ORDER BY p.phase_name_en, year
@@ -1061,12 +1081,11 @@ def api_data_distribution():
             cursor_new = conn_new.cursor()
 
             # 获取年份-地区的观测数量分布（按1年）
-            # For pheno_new, use station_name as location (consistent with /api/pheno-new/locations)
-            # Filter out "Historical Station" prefixes to get actual location names
+            # For pheno_new, use station_name as location and map to state
             cursor_new.execute("""
                 SELECT
                     CAST(reference_year AS INTEGER) as year,
-                    s.station_name as state,
+                    s.station_name,
                     COUNT(o.id) as observation_count
                 FROM dwd_observation o
                 JOIN dwd_station s ON o.station_id = s.id
@@ -1075,10 +1094,35 @@ def api_data_distribution():
                   AND s.area_group = 'Historical'
                   AND NOT s.station_name LIKE 'Historical Station%'
                 GROUP BY CAST(reference_year AS INTEGER), s.station_name
-                ORDER BY year, state
+                ORDER BY year, s.station_name
             """)
 
-            pheno_new_time_location_dist = dict_fetchall(cursor_new)
+            raw_pheno_new_data = dict_fetchall(cursor_new)
+
+            # Map city names to state names and aggregate
+            state_aggregated = {}
+            for item in raw_pheno_new_data:
+                city_name = item['station_name']
+                # Normalize city name to NFC form for consistent matching
+                city_name_normalized = unicodedata.normalize('NFC', city_name)
+                state_name = CITY_STATE_MAPPING.get(city_name_normalized, city_name)  # Use mapping or keep original
+                year = item['year']
+                count = item['observation_count']
+
+                key = (year, state_name)
+                if key not in state_aggregated:
+                    state_aggregated[key] = 0
+                state_aggregated[key] += count
+
+            # Convert back to list format
+            pheno_new_time_location_dist = [
+                {
+                    'year': year,
+                    'state': state,
+                    'observation_count': count
+                }
+                for (year, state), count in sorted(state_aggregated.items())
+            ]
 
             # 获取月份分布
             cursor_new.execute("""

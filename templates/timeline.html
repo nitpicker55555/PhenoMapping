@@ -129,6 +129,23 @@
     </div>
 </div>
 
+<!-- Station Map -->
+<div class="row mb-4" id="station-map-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-map-marked-alt me-2"></i>
+                    Station Locations
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="stations-map" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Statistical Analysis -->
 <div class="row mb-4" id="statistics-section" style="display: none;">
     <div class="col-12 mb-4">
@@ -210,6 +227,7 @@ let allSpecies = []; // Store complete species list
 let allPhases = []; // Store complete phases list
 let allStations = []; // Store complete stations list
 let currentStationId = null; // Store current station ID from URL
+let stationsMap = null; // Leaflet map instance
 
 $(document).ready(function() {
     // Check URL parameters first
@@ -705,9 +723,10 @@ function displayTrendAnalysis(data) {
         alert('No data found matching the criteria');
         return;
     }
-    
+
     // Show result area
     $('#analysis-results').show();
+    $('#station-map-section').show();
     $('#statistics-section').show();
     $('#anomaly-section').show();
     $('#data-table-section').show();
@@ -961,6 +980,7 @@ function loadObservationData(speciesId, phaseId, yearStart, yearEnd) {
     .done(function(data) {
         currentObservationData = data;
         updateObservationTable(data);
+        updateStationsMap(data);
     })
     .fail(function() {
         console.error('Failed to load detailed observation data');
@@ -1040,8 +1060,88 @@ function calculateTrend(years, values) {
     const sumY = values.reduce((sum, value) => sum + value, 0);
     const sumXY = years.reduce((sum, year, i) => sum + year * values[i], 0);
     const sumXX = years.reduce((sum, year) => sum + year * year, 0);
-    
+
     return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+}
+
+function updateStationsMap(observationData) {
+    // Extract unique station names from observations
+    const stationNames = [...new Set(observationData.map(obs => obs.station_name))];
+
+    // Get station details with coordinates
+    const stationsWithCoords = [];
+    const stationObsCounts = {};
+
+    // Count observations per station
+    observationData.forEach(obs => {
+        if (!stationObsCounts[obs.station_name]) {
+            stationObsCounts[obs.station_name] = 0;
+        }
+        stationObsCounts[obs.station_name]++;
+    });
+
+    // Match with station details from allStations
+    stationNames.forEach(name => {
+        const station = allStations.find(s => s.station_name === name);
+        if (station && station.latitude && station.longitude) {
+            stationsWithCoords.push({
+                ...station,
+                observation_count: stationObsCounts[name] || 0
+            });
+        }
+    });
+
+    if (stationsWithCoords.length === 0) {
+        console.warn('No stations with coordinates found');
+        return;
+    }
+
+    // Initialize or reset map
+    if (stationsMap) {
+        stationsMap.remove();
+    }
+
+    // Calculate center of all stations
+    const avgLat = stationsWithCoords.reduce((sum, s) => sum + parseFloat(s.latitude), 0) / stationsWithCoords.length;
+    const avgLng = stationsWithCoords.reduce((sum, s) => sum + parseFloat(s.longitude), 0) / stationsWithCoords.length;
+
+    // Create map
+    stationsMap = L.map('stations-map').setView([avgLat, avgLng], 7);
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(stationsMap);
+
+    // Add markers for each station
+    const markers = [];
+    stationsWithCoords.forEach(station => {
+        const marker = L.marker([
+            parseFloat(station.latitude),
+            parseFloat(station.longitude)
+        ]).addTo(stationsMap);
+
+        // Create popup content
+        const popupContent = `
+            <div style="min-width: 200px;">
+                <h6 class="mb-2"><strong>${station.station_name}</strong></h6>
+                <p class="mb-1"><strong>State:</strong> ${station.state || 'N/A'}</p>
+                <p class="mb-1"><strong>Altitude:</strong> ${station.altitude || 'N/A'}m</p>
+                <p class="mb-1"><strong>Observations:</strong> ${station.observation_count}</p>
+                <p class="mb-0"><strong>Coordinates:</strong> ${parseFloat(station.latitude).toFixed(4)}, ${parseFloat(station.longitude).toFixed(4)}</p>
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        markers.push(marker);
+    });
+
+    // Fit bounds to show all markers
+    if (markers.length > 0) {
+        const group = L.featureGroup(markers);
+        stationsMap.fitBounds(group.getBounds().pad(0.1));
+    }
 }
 </script>
 {% endblock %}
