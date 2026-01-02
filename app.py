@@ -1082,11 +1082,12 @@ def api_data_distribution():
 
             # 获取年份-地区的观测数量分布（按1年）
             # For pheno_new, use station_name as location and map to state
+            # Use DISTINCT to avoid duplicate counting due to duplicate station records
             cursor_new.execute("""
                 SELECT
                     CAST(reference_year AS INTEGER) as year,
                     s.station_name,
-                    COUNT(o.id) as observation_count
+                    COUNT(DISTINCT o.id) as observation_count
                 FROM dwd_observation o
                 JOIN dwd_station s ON o.station_id = s.id
                 WHERE s.station_name IS NOT NULL
