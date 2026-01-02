@@ -677,11 +677,30 @@ function renderMonthlyChart() {
         });
     }
 
-    // Combine all years from filtered datasets
-    const allYears = [...new Set([
-        ...filteredPhenoMonthly.map(d => d.year),
-        ...filteredPhenoNewMonthly.map(d => d.year)
-    ])].sort();
+    // Get all years from filtered datasets
+    const phenoYears = filteredPhenoMonthly.map(d => d.year);
+    const phenoNewYears = filteredPhenoNewMonthly.map(d => d.year);
+
+    // For 'both' mode, create complete year range with real time scale
+    let allYears;
+    if (dataSourceFilter === 'both') {
+        const minYear = Math.min(
+            ...(phenoNewYears.length > 0 ? phenoNewYears : [9999]),
+            ...(phenoYears.length > 0 ? phenoYears : [9999])
+        );
+        const maxYear = Math.max(
+            ...(phenoNewYears.length > 0 ? phenoNewYears : [0]),
+            ...(phenoYears.length > 0 ? phenoYears : [0])
+        );
+        // Generate complete year range for real time scale
+        allYears = [];
+        for (let year = minYear; year <= maxYear; year++) {
+            allYears.push(year);
+        }
+    } else {
+        // For single source, only include years with data
+        allYears = [...new Set([...phenoYears, ...phenoNewYears])].sort();
+    }
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -699,14 +718,29 @@ function renderMonthlyChart() {
     // Pheno datasets (stacked)
     if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno') {
         for (let month = 1; month <= 12; month++) {
-            const data = allYears.map(year => {
-                const item = filteredPhenoMonthly.find(d => d.year === year && d.month === month);
-                if (!item) return null;
-                const value = scaleType === 'log' && item.observation_count > 0
-                    ? Math.log10(item.observation_count + 1)
-                    : item.observation_count;
-                return value;
-            });
+            const data = [];
+            if (dataSourceFilter === 'both') {
+                // In 'both' mode, only add data points where we have actual data
+                filteredPhenoMonthly
+                    .filter(d => d.month === month)
+                    .forEach(item => {
+                        const value = scaleType === 'log' && item.observation_count > 0
+                            ? Math.log10(item.observation_count + 1)
+                            : item.observation_count;
+                        data.push({x: item.year, y: value});
+                    });
+            } else {
+                // In single source mode, use all years
+                allYears.forEach(year => {
+                    const item = filteredPhenoMonthly.find(d => d.year === year && d.month === month);
+                    if (item) {
+                        const value = scaleType === 'log' && item.observation_count > 0
+                            ? Math.log10(item.observation_count + 1)
+                            : item.observation_count;
+                        data.push({x: year, y: value});
+                    }
+                });
+            }
 
             datasets.push({
                 label: `${months[month - 1]} (Pheno)`,
@@ -714,8 +748,7 @@ function renderMonthlyChart() {
                 backgroundColor: greenColors[month - 1],
                 borderColor: greenColors[month - 1],
                 borderWidth: 1,
-                stack: 'pheno',
-                barPercentage: 0.8
+                stack: 'pheno'
             });
         }
     }
@@ -723,14 +756,29 @@ function renderMonthlyChart() {
     // Pheno New datasets (stacked separately)
     if (dataSourceFilter === 'both' || dataSourceFilter === 'pheno_new') {
         for (let month = 1; month <= 12; month++) {
-            const data = allYears.map(year => {
-                const item = filteredPhenoNewMonthly.find(d => d.year === year && d.month === month);
-                if (!item) return null;
-                const value = scaleType === 'log' && item.observation_count > 0
-                    ? Math.log10(item.observation_count + 1)
-                    : item.observation_count;
-                return value;
-            });
+            const data = [];
+            if (dataSourceFilter === 'both') {
+                // In 'both' mode, only add data points where we have actual data
+                filteredPhenoNewMonthly
+                    .filter(d => d.month === month)
+                    .forEach(item => {
+                        const value = scaleType === 'log' && item.observation_count > 0
+                            ? Math.log10(item.observation_count + 1)
+                            : item.observation_count;
+                        data.push({x: item.year, y: value});
+                    });
+            } else {
+                // In single source mode, use all years
+                allYears.forEach(year => {
+                    const item = filteredPhenoNewMonthly.find(d => d.year === year && d.month === month);
+                    if (item) {
+                        const value = scaleType === 'log' && item.observation_count > 0
+                            ? Math.log10(item.observation_count + 1)
+                            : item.observation_count;
+                        data.push({x: year, y: value});
+                    }
+                });
+            }
 
             datasets.push({
                 label: `${months[month - 1]} (New)`,
@@ -738,8 +786,7 @@ function renderMonthlyChart() {
                 backgroundColor: blueColors[month - 1],
                 borderColor: blueColors[month - 1],
                 borderWidth: 1,
-                stack: 'pheno_new',
-                barPercentage: 0.8
+                stack: 'pheno_new'
             });
         }
     }
@@ -750,12 +797,17 @@ function renderMonthlyChart() {
         monthlyChart.destroy();
     }
 
-    monthlyChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
+    // For category mode (single source), add labels
+    const chartData = dataSourceFilter === 'both'
+        ? { datasets: datasets }
+        : {
             labels: allYears.map(y => y.toString()),
             datasets: datasets
-        },
+          };
+
+    monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -771,16 +823,40 @@ function renderMonthlyChart() {
                 },
                 tooltip: {
                     mode: 'index',
-                    intersect: false
+                    intersect: false,
+                    callbacks: {
+                        title: function(context) {
+                            if (dataSourceFilter === 'both') {
+                                if (context && context[0] && context[0].parsed) {
+                                    return 'Year: ' + Math.round(context[0].parsed.x);
+                                }
+                            } else {
+                                if (context && context[0]) {
+                                    return 'Year: ' + context[0].label;
+                                }
+                            }
+                            return '';
+                        }
+                    }
                 }
             },
             scales: {
                 x: {
+                    type: dataSourceFilter === 'both' ? 'linear' : 'category',
                     stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    },
                     ticks: {
                         autoSkip: true,
-                        maxTicksLimit: 20
-                    }
+                        maxTicksLimit: 30,
+                        callback: function(value) {
+                            return dataSourceFilter === 'both' ? Math.round(value) : value;
+                        }
+                    },
+                    min: dataSourceFilter === 'both' ? allYears[0] : undefined,
+                    max: dataSourceFilter === 'both' ? allYears[allYears.length - 1] : undefined
                 },
                 y: {
                     stacked: true,
@@ -791,9 +867,9 @@ function renderMonthlyChart() {
                     }
                 }
             },
-            // Add spacing between different stacks
-            categoryPercentage: dataSourceFilter === 'both' ? 0.7 : 0.9,
-            barPercentage: 0.9
+            // Adjust bar thickness based on mode
+            barThickness: dataSourceFilter === 'both' ? 8 : 'flex',
+            maxBarThickness: dataSourceFilter === 'both' ? 12 : undefined
         }
     });
 }
