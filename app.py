@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, request, send_file
+from flask_caching import Cache
 import psycopg2
 import json
 from datetime import datetime, timedelta
@@ -27,6 +28,11 @@ if os.path.exists(mapping_file):
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+
+# Configure caching
+app.config['CACHE_TYPE'] = 'SimpleCache'  # In-memory cache
+app.config['CACHE_DEFAULT_TIMEOUT'] = 3600  # 1 hour default timeout
+cache = Cache(app)
 
 # 数据库配置
 DB_CONFIG = {
@@ -1002,6 +1008,7 @@ def api_pheno_new_locations():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data-distribution')
+@cache.cached(timeout=7200)  # Cache for 2 hours
 def api_data_distribution():
     """获取数据时空分布统计 - 同时从pheno和pheno_new数据库"""
     conn = get_db_connection()
@@ -1241,6 +1248,7 @@ def api_debug_pheno_new_stations():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data-distribution-detailed')
+@cache.cached(timeout=7200)  # Cache for 2 hours
 def api_data_distribution_detailed():
     """获取详细的站点级别数据分布 - 用于地图和时间线可视化"""
     conn = get_db_connection()

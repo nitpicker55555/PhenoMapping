@@ -1,4 +1,5 @@
 Flask==2.3.3
+Flask-Caching==2.1.0
 psycopg2-binary==2.9.7
 python-dotenv==1.0.0
 odfpy==1.4.1
