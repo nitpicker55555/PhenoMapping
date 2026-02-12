@@ -1020,44 +1020,20 @@ def api_data_distribution():
     try:
         cursor = conn.cursor()
 
-        # ===== PHENO数据库数据 =====
+        # ===== PHENO数据库数据 (using materialized views for speed) =====
         # 获取年份-地区的观测数量分布（按1年）
         cursor.execute("""
-            SELECT
-                CAST(reference_year AS INTEGER) as year,
-                s.state,
-                COUNT(o.id) as observation_count
-            FROM dwd_observation o
-            JOIN dwd_station s ON o.station_id = s.id
-            WHERE s.state IS NOT NULL AND s.state != ''
-            GROUP BY CAST(reference_year AS INTEGER), s.state
+            SELECT year, state, observation_count
+            FROM mv_year_state_distribution
             ORDER BY year, state
         """)
 
         pheno_time_location_dist = dict_fetchall(cursor)
 
-        # 获取月份分布（day_of_year转换为月份）
+        # 获取月份分布
         cursor.execute("""
-            SELECT
-                CAST(reference_year AS INTEGER) as year,
-                CASE
-                    WHEN CAST(day_of_year AS INTEGER) <= 31 THEN 1
-                    WHEN CAST(day_of_year AS INTEGER) <= 59 THEN 2
-                    WHEN CAST(day_of_year AS INTEGER) <= 90 THEN 3
-                    WHEN CAST(day_of_year AS INTEGER) <= 120 THEN 4
-                    WHEN CAST(day_of_year AS INTEGER) <= 151 THEN 5
-                    WHEN CAST(day_of_year AS INTEGER) <= 181 THEN 6
-                    WHEN CAST(day_of_year AS INTEGER) <= 212 THEN 7
-                    WHEN CAST(day_of_year AS INTEGER) <= 243 THEN 8
-                    WHEN CAST(day_of_year AS INTEGER) <= 273 THEN 9
-                    WHEN CAST(day_of_year AS INTEGER) <= 304 THEN 10
-                    WHEN CAST(day_of_year AS INTEGER) <= 334 THEN 11
-                    ELSE 12
-                END as month,
-                COUNT(o.id) as observation_count
-            FROM dwd_observation o
-            WHERE day_of_year IS NOT NULL AND day_of_year != ''
-            GROUP BY CAST(reference_year AS INTEGER), month
+            SELECT year, month, observation_count
+            FROM mv_year_month_distribution
             ORDER BY year, month
         """)
 
@@ -1065,13 +1041,8 @@ def api_data_distribution():
 
         # 获取数据覆盖范围统计
         cursor.execute("""
-            SELECT
-                MIN(CAST(reference_year AS INTEGER)) as min_year,
-                MAX(CAST(reference_year AS INTEGER)) as max_year,
-                COUNT(DISTINCT station_id) as station_count,
-                COUNT(DISTINCT species_id) as species_count,
-                COUNT(DISTINCT phase_id) as phase_count
-            FROM dwd_observation
+            SELECT min_year, max_year, station_count, species_count, phase_count
+            FROM mv_coverage_stats
         """)
 
         pheno_coverage = dict_fetchone(cursor)
@@ -1159,15 +1130,17 @@ def api_data_distribution():
 
             pheno_new_month_dist = dict_fetchall(cursor_new)
 
-            # 获取数据覆盖范围统计
+            # 获取数据覆盖范围统计 (count unique station names, not IDs,
+            # because old import created multiple IDs per physical station)
             cursor_new.execute("""
                 SELECT
-                    MIN(CAST(reference_year AS INTEGER)) as min_year,
-                    MAX(CAST(reference_year AS INTEGER)) as max_year,
-                    COUNT(DISTINCT station_id) as station_count,
-                    COUNT(DISTINCT species_id) as species_count,
-                    COUNT(DISTINCT phase_id) as phase_count
-                FROM dwd_observation
+                    MIN(CAST(o.reference_year AS INTEGER)) as min_year,
+                    MAX(CAST(o.reference_year AS INTEGER)) as max_year,
+                    COUNT(DISTINCT s.station_name) as station_count,
+                    COUNT(DISTINCT o.species_id) as species_count,
+                    COUNT(DISTINCT o.phase_id) as phase_count
+                FROM dwd_observation o
+                JOIN dwd_station s ON o.station_id = s.id
             """)
 
             pheno_new_coverage = dict_fetchone(cursor_new)
@@ -1286,7 +1259,7 @@ def api_data_distribution_detailed():
         if conn_new:
             cursor_new = conn_new.cursor()
 
-            # First, get data without lat/lon filter
+            # Coordinates are now stored in DB for all stations
             cursor_new.execute("""
                 SELECT
                     s.id as station_id,
@@ -1300,46 +1273,13 @@ def api_data_distribution_detailed():
                 FROM dwd_observation o
                 JOIN dwd_station s ON o.station_id = s.id
                 WHERE s.station_name IS NOT NULL
+                  AND s.latitude IS NOT NULL
+                  AND s.longitude IS NOT NULL
                 GROUP BY s.id, s.station_name, s.latitude, s.longitude, s.state, s.area, o.reference_year
                 ORDER BY s.station_name, o.reference_year
             """)
 
-            raw_data = dict_fetchall(cursor_new)
-
-            # Geocode stations that don't have coordinates
-            geocoded_cache = {}  # Cache to avoid geocoding same station multiple times
-
-            for item in raw_data:
-                # If coordinates exist and are valid, use them
-                if item['latitude'] is not None and item['longitude'] is not None:
-                    try:
-                        lat = float(item['latitude'])
-                        lon = float(item['longitude'])
-                        if lat != 0 and lon != 0:  # Valid coordinates
-                            pheno_new_station_yearly.append(item)
-                            continue
-                    except (ValueError, TypeError):
-                        pass
-
-                # Otherwise, try to geocode
-                station_name = item['station_name']
-                if station_name and not station_name.startswith('Historical Station'):
-                    # Check cache first
-                    if station_name not in geocoded_cache:
-                        geocoded = geocode_location(station_name)
-                        if geocoded:
-                            geocoded_cache[station_name] = {
-                                'latitude': geocoded['latitude'],
-                                'longitude': geocoded['longitude']
-                            }
-                        else:
-                            geocoded_cache[station_name] = None
-
-                    # Use cached geocoded coordinates
-                    if geocoded_cache[station_name]:
-                        item['latitude'] = geocoded_cache[station_name]['latitude']
-                        item['longitude'] = geocoded_cache[station_name]['longitude']
-                        pheno_new_station_yearly.append(item)
+            pheno_new_station_yearly = dict_fetchall(cursor_new)
 
             cursor_new.close()
             conn_new.close()
