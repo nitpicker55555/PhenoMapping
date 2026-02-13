@@ -81,9 +81,9 @@
                     <i class="fas fa-calendar-alt"></i>
                 </div>
                 <h5 class="card-title">Time Span</h5>
-                <h3 class="mb-0" id="year-range">
+                <div id="year-range">
                     <div class="spinner-border spinner-border-sm" role="status"></div>
-                </h3>
+                </div>
             </div>
         </div>
     </div>
@@ -192,7 +192,7 @@
             <div class="modal-header">
                 <h5 class="modal-title" id="newDataModalLabel">
                     <i class="fas fa-database me-2"></i>
-                    Pheno New Database Species
+                    Pheno Archive Database Species
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -200,9 +200,9 @@
                 <div class="mb-3">
                     <div class="d-flex align-items-center">
                         <span class="badge bg-success me-2">Existing</span>
-                        <span class="text-muted me-3">Species exists in pheno database</span>
+                        <span class="text-muted me-3">Species exists in Pheno Basic database</span>
                         <span class="badge bg-warning me-2">New</span>
-                        <span class="text-muted">Species not found in pheno database</span>
+                        <span class="text-muted">Species not found in Pheno Basic database</span>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -251,7 +251,7 @@
                     <div class="col-md-6 mb-3">
                         <div class="card h-100">
                             <div class="card-header bg-primary text-white">
-                                <h6 class="mb-0">Pheno New Database Trends</h6>
+                                <h6 class="mb-0">Pheno Archive Database Trends</h6>
                             </div>
                             <div class="card-body d-flex flex-column">
                                 <div class="mb-3">
@@ -279,7 +279,7 @@
                     <div class="col-md-6 mb-3">
                         <div class="card h-100">
                             <div class="card-header bg-success text-white">
-                                <h6 class="mb-0">Pheno Database Trends</h6>
+                                <h6 class="mb-0">Pheno Basic Database Trends</h6>
                             </div>
                             <div class="card-body d-flex flex-column">
                                 <div class="mb-3">
@@ -309,7 +309,7 @@
                     <div class="col-md-6 mb-3">
                         <div class="card h-100">
                             <div class="card-header bg-primary text-white">
-                                <h6 class="mb-0">Pheno New Database Details</h6>
+                                <h6 class="mb-0">Pheno Archive Database Details</h6>
                             </div>
                             <div class="card-body">
                                 <div id="phenoNewPhasesContent">
@@ -327,7 +327,7 @@
                     <div class="col-md-6 mb-3">
                         <div class="card h-100">
                             <div class="card-header bg-success text-white">
-                                <h6 class="mb-0">Pheno Database Details</h6>
+                                <h6 class="mb-0">Pheno Basic Database Details</h6>
                             </div>
                             <div class="card-body">
                                 <div id="phenoPhasesContent">
@@ -364,6 +364,12 @@ $(document).ready(function() {
     initPreviewMap();
     // Load yearly trend chart
     loadYearlyTrend();
+
+    // Auto-open new data modal if requested
+    {% if open_new_data %}
+    var newDataModal = new bootstrap.Modal(document.getElementById('newDataModal'));
+    newDataModal.show();
+    {% endif %}
     
     // Load new data when modal is shown
     $('#newDataModal').on('shown.bs.modal', function () {
@@ -400,7 +406,11 @@ function loadOverviewData() {
             $('#total-stations').html(data.total_stations);
             $('#total-species').html(data.total_species);
             $('#total-phases').html(data.total_phases);
-            $('#year-range').html(data.year_range);
+            let rangeHtml = `<h4 class="mb-1">${data.pheno_basic_range}</h4><small style="color: rgba(255,255,255,0.85);">Pheno Basic</small>`;
+            if (data.pheno_archive_range) {
+                rangeHtml += `<h4 class="mb-1 mt-2">${data.pheno_archive_range}</h4><small style="color: rgba(255,255,255,0.85);">Pheno Archive</small>`;
+            }
+            $('#year-range').html(rangeHtml);
             $('#latest-observations').html(data.latest_year_observations.toLocaleString());
             $('#active-stations').html(data.total_stations + ' stations');
         })
@@ -412,33 +422,73 @@ function loadOverviewData() {
 function initPreviewMap() {
     // Create map instance（Focus on Germany）
     const map = L.map('preview-map').setView([51.1657, 10.4515], 6);
-    
+
     // Add map layers
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
-    
-    // Load station data（仅显示部分Station以提高性能）
+
+    // Load Pheno Basic stations
     $.get('/api/stations')
         .done(function(stations) {
-            // Only display top 50 stations with most observations
-            const topStations = stations.slice(0, 50);
-            
-            topStations.forEach(function(station) {
+            stations.forEach(function(station) {
                 if (station.latitude && station.longitude) {
-                    const marker = L.marker([
-                        parseFloat(station.latitude), 
+                    L.circleMarker([
+                        parseFloat(station.latitude),
                         parseFloat(station.longitude)
-                    ]).addTo(map);
-                    
-                    marker.bindPopup(`
+                    ], {
+                        radius: 4,
+                        fillColor: '#2c5234',
+                        fillOpacity: 0.5,
+                        weight: 0
+                    }).addTo(map).bindPopup(`
                         <strong>${station.station_name}</strong><br>
-                        Altitude: ${station.altitude}m<br>
-                        Observations: ${station.observation_count.toLocaleString()}
+                        <span class="badge bg-success">Pheno Basic</span><br>
+                        Altitude: ${station.altitude || 'N/A'}m<br>
+                        Observations: ${(station.observation_count || 0).toLocaleString()}
                     `);
                 }
             });
         });
+
+    // Load Pheno Archive stations
+    $.get('/api/stations', { data_source: 'pheno_new' })
+        .done(function(stations) {
+            stations.forEach(function(station) {
+                if (station.latitude && station.longitude) {
+                    L.circleMarker([
+                        parseFloat(station.latitude),
+                        parseFloat(station.longitude)
+                    ], {
+                        radius: 6,
+                        fillColor: '#e74c3c',
+                        fillOpacity: 0.8,
+                        weight: 0
+                    }).addTo(map).bindPopup(`
+                        <strong>${station.station_name}</strong><br>
+                        <span class="badge bg-danger">Pheno Archive (1856)</span><br>
+                        Observations: ${(station.observation_count || 0).toLocaleString()}
+                    `);
+                }
+            });
+        });
+
+    // Add legend
+    const legend = L.control({position: 'bottomright'});
+    legend.onAdd = function() {
+        const div = L.DomUtil.create('div', 'info legend');
+        div.style.background = 'white';
+        div.style.padding = '8px 12px';
+        div.style.borderRadius = '4px';
+        div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
+        div.style.fontSize = '12px';
+        div.innerHTML = `
+            <div style="margin-bottom:4px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#2c5234;margin-right:6px;vertical-align:middle;"></span>Pheno Basic</div>
+            <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#e74c3c;margin-right:6px;vertical-align:middle;"></span>Pheno Archive (1856)</div>
+        `;
+        return div;
+    };
+    legend.addTo(map);
 }
 
 function loadYearlyTrend() {
@@ -512,7 +562,7 @@ function loadNewDataSpecies() {
             
             // First show existing species
             if (existingSpecies.length > 0) {
-                html += '<tr class="table-secondary"><td colspan="5"><strong>Species Existing in Pheno Database</strong></td></tr>';
+                html += '<tr class="table-secondary"><td colspan="5"><strong>Species Existing in Pheno Basic Database</strong></td></tr>';
                 existingSpecies.forEach(function(item) {
                     html += `
                         <tr>
@@ -532,7 +582,7 @@ function loadNewDataSpecies() {
             
             // Then show new species
             if (newSpecies.length > 0) {
-                html += '<tr class="table-secondary"><td colspan="5"><strong>New Species Not in Pheno Database</strong></td></tr>';
+                html += '<tr class="table-secondary"><td colspan="5"><strong>New Species Not in Pheno Basic Database</strong></td></tr>';
                 newSpecies.forEach(function(item) {
                     html += `
                         <tr class="table-warning">
@@ -574,7 +624,7 @@ function viewSpeciesPhases(speciesName) {
                 createPhenoNewHistogram(data.pheno_new_phases);
             } else {
                 $('#phenoNewHistogramContainer').hide();
-                $('#phenoNewPhasesContent').html('<p class="text-muted">No phases found in pheno_new database</p>').show();
+                $('#phenoNewPhasesContent').html('<p class="text-muted">No phases found in Pheno Archive database</p>').show();
             }
 
             // Display pheno phases histogram
@@ -590,7 +640,7 @@ function viewSpeciesPhases(speciesName) {
                 createPhenoHistogram(data.pheno_phases);
             } else {
                 $('#phenoHistogramContainer').hide();
-                $('#phenoPhasesContent').html('<p class="text-muted">No phases found in pheno database</p>').show();
+                $('#phenoPhasesContent').html('<p class="text-muted">No phases found in Pheno Basic database</p>').show();
             }
 
             // Store data and create charts
@@ -727,7 +777,7 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Pheno New Database - Phenological Trends'
+                    text: 'Pheno Archive Database - Phenological Trends'
                 },
                 legend: {
                     position: 'bottom',
@@ -863,7 +913,7 @@ function createPhenoChart(data, startYear = null, endYear = null) {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Pheno Database - Phenological Trends'
+                    text: 'Pheno Basic Database - Phenological Trends'
                 },
                 legend: {
                     position: 'bottom',
@@ -964,7 +1014,7 @@ function createPhenoNewHistogram(phasesData) {
                 },
                 title: {
                     display: true,
-                    text: 'Phases Distribution in Pheno New Database'
+                    text: 'Phases Distribution in Pheno Archive Database'
                 },
                 tooltip: {
                     callbacks: {
@@ -1044,7 +1094,7 @@ function createPhenoHistogram(phasesData) {
                 },
                 title: {
                     display: true,
-                    text: 'Phases Distribution in Pheno Database'
+                    text: 'Phases Distribution in Pheno Basic Database'
                 },
                 tooltip: {
                     callbacks: {

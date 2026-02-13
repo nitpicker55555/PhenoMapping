@@ -48,7 +48,7 @@
                             </label>
                             <input type="radio" class="btn-check" name="data-source" id="data-source-new" value="new">
                             <label class="btn btn-outline-success" for="data-source-new">
-                                <i class="fas fa-plus-circle me-1"></i>New Pheno Only
+                                <i class="fas fa-plus-circle me-1"></i>Pheno Archive Only
                             </label>
                         </div>
                     </div>
@@ -361,13 +361,13 @@ function displayGrid(species) {
         let sourceBadges = '';
         if (sp.is_in_pheno && sp.is_in_pheno_new) {
             sourceBadges = `
-                <span class="badge bg-primary me-1" title="In Pheno DB">P</span>
-                <span class="badge bg-success" title="In Pheno New DB">N</span>
+                <span class="badge bg-primary me-1" title="In Pheno Basic DB">P</span>
+                <span class="badge bg-success" title="In Pheno Archive DB">N</span>
             `;
         } else if (sp.is_in_pheno_new) {
-            sourceBadges = `<span class="badge bg-success" title="New Pheno Data Only">New</span>`;
+            sourceBadges = `<span class="badge bg-success" title="Pheno Archive Data Only">New</span>`;
         } else if (sp.is_in_pheno) {
-            sourceBadges = `<span class="badge bg-primary" title="Pheno DB Only">Pheno</span>`;
+            sourceBadges = `<span class="badge bg-primary" title="Pheno Basic DB Only">Pheno</span>`;
         }
 
         grid.append(`
@@ -436,13 +436,13 @@ function displayList(species) {
         let sourceBadges = '';
         if (sp.is_in_pheno && sp.is_in_pheno_new) {
             sourceBadges = `
-                <span class="badge bg-primary me-1" title="In Pheno DB">P</span>
-                <span class="badge bg-success" title="In Pheno New DB">N</span>
+                <span class="badge bg-primary me-1" title="In Pheno Basic DB">P</span>
+                <span class="badge bg-success" title="In Pheno Archive DB">N</span>
             `;
         } else if (sp.is_in_pheno_new) {
-            sourceBadges = `<span class="badge bg-success" title="New Pheno Data Only">New</span>`;
+            sourceBadges = `<span class="badge bg-success" title="Pheno Archive Data Only">New</span>`;
         } else if (sp.is_in_pheno) {
-            sourceBadges = `<span class="badge bg-primary" title="Pheno DB Only">Pheno</span>`;
+            sourceBadges = `<span class="badge bg-primary" title="Pheno Basic DB Only">Pheno</span>`;
         }
 
         tbody.append(`
@@ -986,7 +986,7 @@ function filterSpeciesByPhase() {
             });
     } else {
         // For new pheno data, phase filter is not supported
-        alert('Phase filtering is not available for New Pheno Data. Please switch to "All Data" mode.');
+        alert('Phase filtering is not available for Pheno Archive Data. Please switch to "All Data" mode.');
         $('#phase-filter').val('');
         filterSpecies();
     }

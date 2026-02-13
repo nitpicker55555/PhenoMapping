@@ -55,7 +55,7 @@
         <div class="card border-success h-100">
             <div class="card-header bg-success text-white">
                 <h6 class="mb-0">
-                    <i class="fas fa-database me-2"></i>Pheno Database (Modern Data)
+                    <i class="fas fa-database me-2"></i>Pheno Basic Database
                 </h6>
             </div>
             <div class="card-body">
@@ -84,7 +84,7 @@
         <div class="card border-info h-100">
             <div class="card-header bg-info text-white">
                 <h6 class="mb-0">
-                    <i class="fas fa-database me-2"></i>Pheno New Database (Historical Data)
+                    <i class="fas fa-database me-2"></i>Pheno Archive Database
                 </h6>
             </div>
             <div class="card-body">
@@ -129,8 +129,8 @@
                         <label class="form-label">Data Source</label>
                         <select class="form-select" id="data-source-filter">
                             <option value="both" selected>Both Databases</option>
-                            <option value="pheno">Pheno Only (Modern)</option>
-                            <option value="pheno_new">Pheno New Only (Historical)</option>
+                            <option value="pheno">Pheno Basic Only</option>
+                            <option value="pheno_new">Pheno Archive Only</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -181,10 +181,10 @@
                         <div class="col-md-4 text-end">
                             <small>
                                 <span class="badge" style="background-color: rgba(44, 82, 52, 0.7);">
-                                    <i class="fas fa-circle"></i> Pheno (Modern)
+                                    <i class="fas fa-circle"></i> Pheno Basic
                                 </span>
-                                <span class="badge" style="background-color: rgba(23, 162, 184, 0.7);">
-                                    <i class="fas fa-circle"></i> Pheno New (Historical)
+                                <span class="badge" style="background-color: rgba(231, 76, 60, 0.8);">
+                                    <i class="fas fa-circle"></i> Pheno Archive
                                 </span>
                             </small>
                         </div>
@@ -221,10 +221,10 @@
                         <div class="col-md-6 text-end">
                             <small>
                                 <span class="badge" style="background-color: rgba(44, 82, 52, 0.8);">
-                                    <i class="fas fa-square"></i> Pheno (Modern)
+                                    <i class="fas fa-square"></i> Pheno Basic
                                 </span>
-                                <span class="badge" style="background-color: rgba(23, 162, 184, 0.8);">
-                                    <i class="fas fa-square"></i> Pheno New (Historical)
+                                <span class="badge" style="background-color: rgba(231, 76, 60, 0.8);">
+                                    <i class="fas fa-square"></i> Pheno Archive
                                 </span>
                             </small>
                         </div>
@@ -269,7 +269,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                     <table class="table table-sm table-striped" id="top-regions-table">
                         <thead>
                             <tr>
@@ -300,7 +300,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                     <table class="table table-sm table-striped" id="top-periods-table">
                         <thead>
                             <tr>
@@ -329,6 +329,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
 
 <script>
+const EXCLUDED_STATIONS = ['Unknown', 'Unknown_49-51', 'Bemerkungen', 'Spitzel', 'Schramm', 'Airischwand'];
+
 let distributionData = null;
 let detailedData = null;
 let currentChart = null;
@@ -588,7 +590,7 @@ function renderHeatmap() {
         data: {
             datasets: [
                 {
-                    label: 'Pheno (Modern)',
+                    label: 'Pheno Basic',
                     data: phenoMatrixData,
                     backgroundColor(context) {
                         if (!context.dataset.data || !context.dataset.data[context.dataIndex]) {
@@ -604,7 +606,7 @@ function renderHeatmap() {
                     height: ({chart}) => Math.max(15, (chart.chartArea || {}).height / states.length - 1)
                 },
                 {
-                    label: 'Pheno New (Historical)',
+                    label: 'Pheno Archive',
                     data: phenoNewMatrixData,
                     backgroundColor(context) {
                         if (!context.dataset.data || !context.dataset.data[context.dataIndex]) {
@@ -612,7 +614,7 @@ function renderHeatmap() {
                         }
                         const value = context.dataset.data[context.dataIndex].v;
                         const alpha = Math.max(0.5, Math.min(1.0, value / phenoNewMaxValue * 0.8 + 0.2));
-                        return `rgba(33, 150, 243, ${alpha})`; // Brighter blue
+                        return `rgba(231, 76, 60, ${alpha})`; // Red for archive
                     },
                     borderColor: 'rgba(255, 255, 255, 0.3)',
                     borderWidth: 0.5,
@@ -644,7 +646,7 @@ function renderHeatmap() {
                         label(context) {
                             const item = context.dataset.data[context.dataIndex];
                             return [
-                                `Source: ${item.source === 'pheno' ? 'Pheno (Modern)' : 'Pheno New (Historical)'}`,
+                                `Source: ${item.source === 'pheno' ? 'Pheno Basic' : 'Pheno Archive'}`,
                                 `Year: ${item.x}`,
                                 `Observations: ${item.count.toLocaleString()}`
                             ];
@@ -759,9 +761,9 @@ function renderMonthlyChart() {
         '#2c5234', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7',
         '#d8f3dc', '#95d5b2', '#74c69d', '#52b788', '#40916c', '#2c5234'
     ];
-    const blueColors = [
-        '#17a2b8', '#20c997', '#28a745', '#007bff', '#6610f2', '#6f42c1',
-        '#e83e8c', '#6f42c1', '#6610f2', '#007bff', '#28a745', '#20c997'
+    const redColors = [
+        '#e74c3c', '#c0392b', '#e67e22', '#d35400', '#f39c12', '#e74c3c',
+        '#c0392b', '#e67e22', '#d35400', '#f39c12', '#e74c3c', '#c0392b'
     ];
 
     // Pheno datasets (stacked)
@@ -792,7 +794,7 @@ function renderMonthlyChart() {
             }
 
             datasets.push({
-                label: `${months[month - 1]} (Pheno)`,
+                label: `${months[month - 1]} (Pheno Basic)`,
                 data: data,
                 backgroundColor: greenColors[month - 1],
                 borderColor: greenColors[month - 1],
@@ -830,10 +832,10 @@ function renderMonthlyChart() {
             }
 
             datasets.push({
-                label: `${months[month - 1]} (New)`,
+                label: `${months[month - 1]} (Archive)`,
                 data: data,
-                backgroundColor: blueColors[month - 1],
-                borderColor: blueColors[month - 1],
+                backgroundColor: redColors[month - 1],
+                borderColor: redColors[month - 1],
                 borderWidth: 1,
                 stack: 'pheno_new'
             });
@@ -1106,8 +1108,8 @@ function renderMap() {
     const maxCount = Math.max(...counts);
     const minCount = Math.min(...counts);
 
-    // Add markers
-    const stations = Object.values(stationData);
+    // Add markers (filter excluded stations)
+    const stations = Object.values(stationData).filter(s => !EXCLUDED_STATIONS.includes(s.station_name));
     console.log(`Adding ${stations.length} stations to map`);
 
     const phenoStations = stations.filter(s => s.source === 'pheno');
@@ -1121,9 +1123,8 @@ function renderMap() {
 
         const radius = 3 + normalizedSize * 12; // 3-15px radius (smaller)
 
-        const color = station.source === 'pheno'
-            ? 'rgba(44, 82, 52, 0.4)'  // Green for pheno (lower opacity)
-            : 'rgba(23, 162, 184, 0.4)'; // Blue for pheno_new (lower opacity)
+        const isArchive = station.source === 'pheno_new';
+        const color = isArchive ? '#e74c3c' : 'rgba(44, 82, 52, 0.4)';
 
         const yearRange = station.years.length > 0
             ? `${Math.min(...station.years)} - ${Math.max(...station.years)}`
@@ -1132,16 +1133,14 @@ function renderMap() {
         const circle = L.circleMarker([station.latitude, station.longitude], {
             radius: radius,
             fillColor: color,
-            color: color,  // Same color as fill (no visible border)
-            weight: 0,      // No border
-            opacity: 0,     // No border opacity
-            fillOpacity: 0.4  // Lower transparency
+            weight: 0,
+            fillOpacity: isArchive ? 0.8 : 0.4
         }).addTo(distributionMap);
 
         circle.bindPopup(`
             <div>
                 <h6>${station.station_name}</h6>
-                <p class="mb-1"><strong>Source:</strong> ${station.source === 'pheno' ? 'Pheno (Modern)' : 'Pheno New (Historical)'}</p>
+                <p class="mb-1"><strong>Source:</strong> ${station.source === 'pheno' ? 'Pheno Basic' : 'Pheno Archive'}</p>
                 <p class="mb-1"><strong>Total Observations:</strong> ${station.count.toLocaleString()}</p>
                 <p class="mb-1"><strong>Year Range:</strong> ${yearRange}</p>
                 <p class="mb-0"><strong>Location:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</p>

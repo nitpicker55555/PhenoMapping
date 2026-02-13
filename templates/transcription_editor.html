@@ -70,6 +70,10 @@
         .editor-panel.hidden {
             display: none;
         }
+        /* In dual mode, right panel has no sidebar */
+        .editor-panel.dual-right .panel-sidebar {
+            display: none;
+        }
 
         /* Sidebar */
         .panel-sidebar {
@@ -150,19 +154,36 @@
         }
         .image-container {
             position: relative;
-            overflow: auto;
+            overflow: hidden;
             border: 1px solid #dee2e6;
             background-color: #f5f5f5;
             max-height: calc(100vh - 300px);
+            min-height: 400px;
         }
         .tif-preview {
             display: block;
-            margin: 0 auto;
+            transform-origin: 0 0;
             cursor: grab;
-            transition: transform 0.1s;
+            user-select: none;
+            -webkit-user-drag: none;
         }
         .tif-preview:active {
             cursor: grabbing;
+        }
+        .image-loading-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(245, 245, 245, 0.9);
+            z-index: 5;
+        }
+        .image-loading-overlay .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: #3498db;
         }
         .zoom-controls {
             position: absolute;
@@ -264,11 +285,14 @@
         <div class="control-bar">
             <h5><i class="fas fa-edit"></i> Transcription Editor</h5>
             <div class="layout-controls">
-                <button class="layout-btn active" onclick="setLayout('single')">
+                <button class="layout-btn active" onclick="setLayout('single')" data-layout="single">
                     <i class="fas fa-square"></i> Single Panel
                 </button>
-                <button class="layout-btn" onclick="setLayout('dual')">
+                <button class="layout-btn" onclick="setLayout('dual')" data-layout="dual">
                     <i class="fas fa-columns"></i> Dual Panel
+                </button>
+                <button class="layout-btn" onclick="showSpeciesMapping()">
+                    <i class="fas fa-dna"></i> Species Mapping
                 </button>
             </div>
         </div>
@@ -279,7 +303,7 @@
             <div class="editor-panel" id="panel-left">
                 <div class="panel-sidebar">
                     <div class="sidebar-header">
-                        Folders (Panel 1)
+                        Folders
                     </div>
                     <div id="folder-list-left">
                         <!-- Folders will be loaded here -->
@@ -302,28 +326,26 @@
                 </div>
             </div>
 
-            <!-- Right Panel -->
-            <div class="editor-panel hidden" id="panel-right">
+            <!-- Right Panel (used in dual mode for TIF image) -->
+            <div class="editor-panel hidden dual-right" id="panel-right">
                 <div class="panel-sidebar">
                     <div class="sidebar-header">
                         Folders (Panel 2)
                     </div>
                     <div id="folder-list-right">
-                        <!-- Folders will be loaded here -->
                     </div>
                 </div>
                 <div class="panel-content">
                     <div class="content-header">
-                        <h5 class="mb-0" id="folder-name-right">No folder selected</h5>
+                        <h5 class="mb-0" id="folder-name-right">TIF Image</h5>
                     </div>
                     <div class="file-tabs" id="file-tabs-right">
-                        <!-- File tabs will be here -->
                     </div>
                     <div class="content-body" id="content-right">
                         <div class="empty-state">
-                            <i class="fas fa-folder-open"></i>
-                            <h5>Select a folder to begin</h5>
-                            <p>Choose a folder from the sidebar to view and edit its contents</p>
+                            <i class="fas fa-image"></i>
+                            <h5>Select a folder to view TIF image</h5>
+                            <p>In dual mode, the TIF image will appear here</p>
                         </div>
                     </div>
                 </div>
@@ -395,8 +417,68 @@
             $(`#folder-list-${panelId} .folder-item[data-folder="${folderName}"]`).addClass('active');
             $(`#folder-name-${panelId}`).text(folderName);
 
-            // Load folder contents
-            loadFolderContents(panelId, folderName);
+            if (currentLayout === 'dual' && panelId === 'left') {
+                // In dual mode, left panel shows ODT, right panel shows TIF
+                loadDualMode(folderName);
+            } else {
+                // Single mode: load folder contents with file tabs
+                loadFolderContents(panelId, folderName);
+            }
+        }
+
+        function loadDualMode(folderName) {
+            // Load folder contents and split: ODT in left, TIF in right
+            $.get(`/api/transcription/folder/${encodeURIComponent(folderName)}`, function(data) {
+                const odtFile = data.files.find(f => f.type === 'odt');
+                const tifFile = data.files.find(f => f.type === 'tif');
+
+                // Left panel: show ODT table
+                const leftTabs = $('#file-tabs-left');
+                leftTabs.empty();
+                if (odtFile) {
+                    leftTabs.append(`<button class="file-tab active"><i class="fas fa-file-alt"></i> ${odtFile.name}</button>`);
+                    loadOdtContent('left', odtFile);
+                } else {
+                    $('#content-left').html('<div class="empty-state"><i class="fas fa-file-alt"></i><h5>No ODT file in this folder</h5></div>');
+                }
+
+                // Right panel: show TIF image
+                $('#folder-name-right').text(folderName + ' - TIF Image');
+                const rightTabs = $('#file-tabs-right');
+                rightTabs.empty();
+                if (tifFile) {
+                    rightTabs.append(`<button class="file-tab active"><i class="fas fa-image"></i> ${tifFile.name}</button>`);
+                    showTifImage('right', folderName, tifFile);
+                } else {
+                    $('#content-right').html('<div class="empty-state"><i class="fas fa-image"></i><h5>No TIF file in this folder</h5></div>');
+                }
+            });
+        }
+
+        function showTifImage(panelId, folderName, file) {
+            panelState[panelId].currentFile = file;
+            panelState[panelId].folder = folderName;
+            const contentArea = $(`#content-${panelId}`);
+            contentArea.empty();
+
+            contentArea.html(`
+                <div class="image-container" id="image-container-${panelId}">
+                    <div class="image-loading-overlay" id="image-loading-${panelId}">
+                        <div class="spinner-border" role="status"></div>
+                        <p class="mt-2 text-muted">Loading image...</p>
+                    </div>
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomImage('${panelId}', 'in')"><i class="fas fa-search-plus"></i></button>
+                        <span class="zoom-level" id="zoom-level-${panelId}">Fit</span>
+                        <button class="zoom-btn" onclick="zoomImage('${panelId}', 'out')"><i class="fas fa-search-minus"></i></button>
+                        <button class="zoom-btn" onclick="zoomImage('${panelId}', 'fit')" title="Fit to window"><i class="fas fa-expand"></i></button>
+                    </div>
+                    <img class="tif-preview" id="tif-image-${panelId}" src="/api/transcription/image/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}" alt="TIF preview">
+                </div>
+            `);
+
+            panelState[panelId].zoom = { level: 1, panX: 0, panY: 0 };
+            initImageViewer(panelId);
         }
 
         function loadFolderContents(panelId, folderName) {
@@ -440,11 +522,15 @@
                 contentArea.html(`
                     <h5>Scanned Image Preview</h5>
                     <div class="image-container" id="image-container-${panelId}">
+                        <div class="image-loading-overlay" id="image-loading-${panelId}">
+                            <div class="spinner-border" role="status"></div>
+                            <p class="mt-2 text-muted">Loading image...</p>
+                        </div>
                         <div class="zoom-controls">
                             <button class="zoom-btn" onclick="zoomImage('${panelId}', 'in')"><i class="fas fa-search-plus"></i></button>
-                            <span class="zoom-level" id="zoom-level-${panelId}">100%</span>
+                            <span class="zoom-level" id="zoom-level-${panelId}">Fit</span>
                             <button class="zoom-btn" onclick="zoomImage('${panelId}', 'out')"><i class="fas fa-search-minus"></i></button>
-                            <button class="zoom-btn" onclick="zoomImage('${panelId}', 'reset')"><i class="fas fa-undo"></i></button>
+                            <button class="zoom-btn" onclick="zoomImage('${panelId}', 'fit')" title="Fit to window"><i class="fas fa-expand"></i></button>
                         </div>
                         <img class="tif-preview" id="tif-image-${panelId}" src="/api/transcription/image/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}" alt="TIF preview">
                     </div>
@@ -461,11 +547,9 @@
                     </div>
                 `);
 
-                // Initialize zoom state
-                panelState[panelId].zoom = { level: 1, x: 0, y: 0 };
-
-                // Enable image dragging
-                enableImageDragging(panelId);
+                // Initialize image viewer
+                panelState[panelId].zoom = { level: 1, panX: 0, panY: 0 };
+                initImageViewer(panelId);
 
                 // Load existing annotations
                 loadAnnotations(panelId, folderName, file.name);
@@ -474,31 +558,108 @@
             }
         }
 
+        // Get cell text (handles both plain strings and {text, colspan} objects)
+        function getCellText(cell) {
+            if (typeof cell === 'object' && cell !== null) return cell.text || '';
+            return cell || '';
+        }
+
+        // Get cell colspan
+        function getCellColspan(cell) {
+            if (typeof cell === 'object' && cell !== null) return cell.colspan || 1;
+            return 1;
+        }
+
+        // Get cell rowspan
+        function getCellRowspan(cell) {
+            if (typeof cell === 'object' && cell !== null) return cell.rowspan || 1;
+            return 1;
+        }
+
+        // Build span attributes string for a cell
+        function getSpanAttrs(cell) {
+            let attrs = '';
+            const cs = getCellColspan(cell);
+            const rs = getCellRowspan(cell);
+            if (cs > 1) attrs += ` colspan="${cs}"`;
+            if (rs > 1) attrs += ` rowspan="${rs}"`;
+            return attrs;
+        }
+
+        // Count logical columns in a row (sum of colspans)
+        function getLogicalColCount(row) {
+            return row.reduce((sum, cell) => sum + getCellColspan(cell), 0);
+        }
+
+        // Merge consecutive header+data tables in ODT
+        function mergeTables(tables) {
+            if (!tables || tables.length < 2) return tables;
+
+            const merged = [];
+            let i = 0;
+            while (i < tables.length) {
+                // Check if this table is a header (exactly 2 rows) and next table is data
+                if (i + 1 < tables.length &&
+                    tables[i].length === 2 &&
+                    tables[i + 1].length > 0) {
+                    // Compare logical column counts (accounting for colspans)
+                    const headerLogicalCols = getLogicalColCount(tables[i][0]);
+                    const dataLogicalCols = getLogicalColCount(tables[i + 1][0]);
+                    if (headerLogicalCols === dataLogicalCols) {
+                        const mergedTable = [...tables[i], ...tables[i + 1]];
+                        mergedTable._headerRows = 2;
+                        merged.push(mergedTable);
+                        i += 2;
+                        continue;
+                    }
+                }
+                merged.push(tables[i]);
+                i++;
+            }
+            return merged;
+        }
+
         function loadOdtContent(panelId, file) {
             const folderName = panelState[panelId].folder;
 
             $.get(`/api/transcription/odt/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`, function(data) {
-                panelState[panelId].tables = data.tables || [];
+                let tables = data.tables || [];
+                // Merge header+data tables
+                tables = mergeTables(tables);
+                panelState[panelId].tables = tables;
 
                 const contentArea = $(`#content-${panelId}`);
                 contentArea.empty();
 
                 let html = '<h5>ODT File Content</h5>';
 
-                if (panelState[panelId].tables.length > 0) {
+                if (tables.length > 0) {
                     html += '<div class="table-preview">';
-                    panelState[panelId].tables.forEach((table, tIndex) => {
+                    tables.forEach((table, tIndex) => {
+                        const headerRows = table._headerRows || 1;
                         html += `<h6>Table ${tIndex + 1}</h6>`;
                         html += `<table class="table table-bordered table-sm" data-table="${tIndex}">`;
+                        html += '<thead>';
                         table.forEach((row, rIndex) => {
-                            html += '<tr>';
-                            row.forEach((cell, cIndex) => {
-                                const tag = rIndex === 0 ? 'th' : 'td';
-                                html += `<${tag}>${cell || '-'}</${tag}>`;
-                            });
-                            html += '</tr>';
+                            if (rIndex < headerRows) {
+                                html += '<tr>';
+                                row.forEach(cell => {
+                                    html += `<th${getSpanAttrs(cell)}>${getCellText(cell) || '-'}</th>`;
+                                });
+                                html += '</tr>';
+                            }
                         });
-                        html += '</table>';
+                        html += '</thead><tbody>';
+                        table.forEach((row, rIndex) => {
+                            if (rIndex >= headerRows) {
+                                html += '<tr>';
+                                row.forEach(cell => {
+                                    html += `<td${getSpanAttrs(cell)}>${getCellText(cell) || '-'}</td>`;
+                                });
+                                html += '</tr>';
+                            }
+                        });
+                        html += '</tbody></table>';
                     });
                     html += '</div>';
                 } else {
@@ -529,63 +690,193 @@
             });
         }
 
-        function zoomImage(panelId, action) {
-            const state = panelState[panelId];
-            if (!state.zoom) state.zoom = { level: 1, x: 0, y: 0 };
+        // Species Mapping viewer
+        function showSpeciesMapping() {
+            // Show species mapping in the left panel content area
+            const contentArea = $('#content-left');
+            const fileTabs = $('#file-tabs-left');
+            fileTabs.empty();
+            fileTabs.append('<button class="file-tab active"><i class="fas fa-dna"></i> Species Mapping</button>');
+            $('#folder-name-left').text('Species Mapping');
 
-            const img = $(`#tif-image-${panelId}`);
-            let newLevel = state.zoom.level;
+            contentArea.html(`
+                <div class="text-center py-3">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2 text-muted">Loading species mapping data...</p>
+                </div>
+            `);
 
-            if (action === 'in') {
-                newLevel = Math.min(state.zoom.level + 0.2, 3);
-            } else if (action === 'out') {
-                newLevel = Math.max(state.zoom.level - 0.2, 0.5);
-            } else if (action === 'reset') {
-                newLevel = 1;
-            }
+            $.get('/api/species-mapping', function(data) {
+                if (!data.data || data.data.length === 0) {
+                    contentArea.html('<div class="alert alert-info">No species mapping data found.</div>');
+                    return;
+                }
 
-            state.zoom.level = newLevel;
-            img.css('transform', `scale(${newLevel})`);
-            $(`#zoom-level-${panelId}`).text(Math.round(newLevel * 100) + '%');
+                const rows = data.data;
+                const headers = Object.keys(rows[0]);
+
+                let html = '<h5>Species Mapping Table</h5>';
+                html += '<div class="table-preview" style="max-height: calc(100vh - 300px); overflow-y: auto;">';
+                html += '<table class="table table-bordered table-sm table-striped">';
+                html += '<thead class="table-dark"><tr>';
+                headers.forEach(h => {
+                    html += `<th>${h}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                rows.forEach(row => {
+                    html += '<tr>';
+                    headers.forEach(h => {
+                        html += `<td>${row[h] || '-'}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+
+                // Add annotations section for species mapping
+                html += `
+                    <div class="mt-4">
+                        <h6>Annotations</h6>
+                        <div id="annotations-left" class="mb-3">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            Loading annotations...
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="new-annotation-left" placeholder="Add a new annotation..." onkeypress="if(event.key==='Enter') addAnnotation('left')">
+                            <button class="btn btn-primary" onclick="addAnnotation('left')"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                    </div>
+                `;
+
+                contentArea.html(html);
+
+                // Set state for annotation support
+                panelState.left.folder = 'species_mapping';
+                panelState.left.currentFile = { name: 'species_mapping', type: 'csv' };
+
+                loadAnnotations('left', 'species_mapping', 'species_mapping');
+            }).fail(function() {
+                contentArea.html('<div class="alert alert-danger">Failed to load species mapping data.</div>');
+            });
         }
 
-        function enableImageDragging(panelId) {
+        function zoomImage(panelId, action) {
+            const state = panelState[panelId];
+            if (!state.zoom) state.zoom = { level: 1, panX: 0, panY: 0 };
+
+            const img = $(`#tif-image-${panelId}`);
+            const container = $(`#image-container-${panelId}`);
+
+            if (action === 'fit') {
+                // Fit image to container
+                const cw = container.width();
+                const ch = container.height();
+                const iw = img[0].naturalWidth || img.width();
+                const ih = img[0].naturalHeight || img.height();
+                if (iw && ih) {
+                    state.zoom.level = Math.min(cw / iw, ch / ih, 1);
+                    // Center the image
+                    state.zoom.panX = (cw - iw * state.zoom.level) / 2;
+                    state.zoom.panY = (ch - ih * state.zoom.level) / 2;
+                }
+                $(`#zoom-level-${panelId}`).text('Fit');
+            } else {
+                // Zoom towards center of container
+                const cw = container.width();
+                const ch = container.height();
+                const oldLevel = state.zoom.level;
+                let newLevel;
+
+                if (action === 'in') {
+                    newLevel = Math.min(oldLevel * 1.25, 5);
+                } else {
+                    newLevel = Math.max(oldLevel / 1.25, 0.1);
+                }
+
+                // Zoom around the center of the visible area
+                const cx = cw / 2;
+                const cy = ch / 2;
+                state.zoom.panX = cx - (cx - state.zoom.panX) * (newLevel / oldLevel);
+                state.zoom.panY = cy - (cy - state.zoom.panY) * (newLevel / oldLevel);
+                state.zoom.level = newLevel;
+                $(`#zoom-level-${panelId}`).text(Math.round(newLevel * 100) + '%');
+            }
+
+            applyTransform(panelId);
+        }
+
+        function applyTransform(panelId) {
+            const state = panelState[panelId];
+            const img = $(`#tif-image-${panelId}`);
+            img.css('transform', `translate(${state.zoom.panX}px, ${state.zoom.panY}px) scale(${state.zoom.level})`);
+        }
+
+        function initImageViewer(panelId) {
             const container = $(`#image-container-${panelId}`);
             const img = $(`#tif-image-${panelId}`);
             let isDragging = false;
-            let startX, startY, scrollLeft, scrollTop;
+            let lastX, lastY;
 
-            img.on('mousedown', function(e) {
-                isDragging = true;
-                startX = e.pageX - container.offset().left;
-                startY = e.pageY - container.offset().top;
-                scrollLeft = container.scrollLeft();
-                scrollTop = container.scrollTop();
+            // Show loading overlay, hide when image loads
+            img.on('load', function() {
+                $(`#image-loading-${panelId}`).fadeOut(300);
+                // Auto fit on first load
+                zoomImage(panelId, 'fit');
             });
 
-            $(document).on('mouseup', function() {
+            // If image fails to load
+            img.on('error', function() {
+                $(`#image-loading-${panelId}`).html('<p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Failed to load image</p>');
+            });
+
+            // Mouse drag to pan
+            img.on('mousedown', function(e) {
+                e.preventDefault();
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            $(document).on('mouseup.imgdrag' + panelId, function() {
                 isDragging = false;
             });
 
-            container.on('mousemove', function(e) {
+            $(document).on('mousemove.imgdrag' + panelId, function(e) {
                 if (!isDragging) return;
                 e.preventDefault();
-                const x = e.pageX - container.offset().left;
-                const y = e.pageY - container.offset().top;
-                const walkX = (x - startX) * 2;
-                const walkY = (y - startY) * 2;
-                container.scrollLeft(scrollLeft - walkX);
-                container.scrollTop(scrollTop - walkY);
+                const state = panelState[panelId];
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                state.zoom.panX += dx;
+                state.zoom.panY += dy;
+                applyTransform(panelId);
             });
 
-            // Mouse wheel zoom
+            // Mouse wheel zoom towards cursor
             container.on('wheel', function(e) {
                 e.preventDefault();
+                const state = panelState[panelId];
+                const oldLevel = state.zoom.level;
+                let newLevel;
+
                 if (e.originalEvent.deltaY < 0) {
-                    zoomImage(panelId, 'in');
+                    newLevel = Math.min(oldLevel * 1.15, 5);
                 } else {
-                    zoomImage(panelId, 'out');
+                    newLevel = Math.max(oldLevel / 1.15, 0.1);
                 }
+
+                // Zoom towards mouse cursor position
+                const rect = container[0].getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+
+                state.zoom.panX = mx - (mx - state.zoom.panX) * (newLevel / oldLevel);
+                state.zoom.panY = my - (my - state.zoom.panY) * (newLevel / oldLevel);
+                state.zoom.level = newLevel;
+
+                applyTransform(panelId);
+                $(`#zoom-level-${panelId}`).text(Math.round(newLevel * 100) + '%');
             });
         }
 
@@ -650,12 +941,20 @@
             currentLayout = layout;
 
             $('.layout-btn').removeClass('active');
-            $(`.layout-btn:contains('${layout === 'single' ? 'Single' : 'Dual'}')`).addClass('active');
+            $(`.layout-btn[data-layout="${layout}"]`).addClass('active');
 
             if (layout === 'single') {
                 $('#panel-right').addClass('hidden');
+                // Restore left panel sidebar header
+                $('#panel-left .sidebar-header').text('Folders');
             } else {
                 $('#panel-right').removeClass('hidden');
+                $('#panel-left .sidebar-header').text('Folders');
+                // If a folder is already selected in left panel, load dual mode
+                const currentFolder = panelState.left.folder;
+                if (currentFolder) {
+                    loadDualMode(currentFolder);
+                }
             }
         }
     </script>

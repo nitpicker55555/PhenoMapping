@@ -60,13 +60,21 @@
                     </div>
                 </div>
                 <div class="row g-3 mt-2">
-                    <div class="col-md-3">
-                        <label for="year-start" class="form-label">Start Year</label>
-                        <input type="number" class="form-control" id="year-start" min="1953" max="2023" value="2000">
+                    <div class="col-md-2">
+                        <label for="data-source-select" class="form-label">Data Source</label>
+                        <select class="form-select" id="data-source-select">
+                            <option value="pheno" selected>Pheno Basic</option>
+                            <option value="pheno_new">Pheno Archive</option>
+                            <option value="both">Both</option>
+                        </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label for="year-start" class="form-label">Start Year</label>
+                        <input type="number" class="form-control" id="year-start" min="1800" max="2100" value="2000">
+                    </div>
+                    <div class="col-md-2">
                         <label for="year-end" class="form-label">End Year</label>
-                        <input type="number" class="form-control" id="year-end" min="1953" max="2023" value="2023">
+                        <input type="number" class="form-control" id="year-end" min="1800" max="2100" value="2023">
                     </div>
                     <div class="col-md-3">
                         <button class="btn btn-primary w-100 mt-4" id="analyze-btn">
@@ -196,7 +204,7 @@
                 </button>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                     <table class="table table-striped table-hover" id="observation-table">
                         <thead class="table-dark">
                             <tr>
@@ -221,6 +229,8 @@
 
 {% block extra_js %}
 <script>
+const EXCLUDED_STATIONS = ['Unknown', 'Unknown_49-51', 'Bemerkungen', 'Spitzel', 'Schramm', 'Airischwand'];
+
 let currentTrendData = null;
 let currentObservationData = null;
 let allSpecies = []; // Store complete species list
@@ -228,6 +238,10 @@ let allPhases = []; // Store complete phases list
 let allStations = []; // Store complete stations list
 let currentStationId = null; // Store current station ID from URL
 let stationsMap = null; // Leaflet map instance
+
+function getDataSource() {
+    return $('#data-source-select').val() || 'pheno';
+}
 
 $(document).ready(function() {
     // Check URL parameters first
@@ -403,6 +417,39 @@ $(document).ready(function() {
         $('#station-info-badge').hide();
     });
 
+    // Data source change handler - reset filters and reload dropdowns
+    $('#data-source-select').change(function() {
+        const source = $(this).val();
+
+        // Update year range defaults based on data source
+        if (source === 'pheno_new') {
+            $('#year-start').val(1856);
+            $('#year-end').val(1856);
+        } else if (source === 'pheno') {
+            $('#year-start').val(2000);
+            $('#year-end').val(2023);
+        } else {
+            // both
+            $('#year-start').val(1856);
+            $('#year-end').val(2023);
+        }
+
+        // Clear all current selections
+        $('#station-select').val('');
+        $('#species-select').val('');
+        $('#phase-select').val('');
+        currentStationId = null;
+        $('#station-filter-badge').hide();
+        $('#species-filter-badge').hide();
+        $('#phase-filter-badge').hide();
+        $('#station-info-badge').hide();
+
+        // Reload all dropdowns with new data source
+        loadStationsData();
+        loadSpeciesData();
+        loadPhasesData();
+    });
+
     // Analysis button event
     $('#analyze-btn').click(performAnalysis);
 
@@ -411,8 +458,9 @@ $(document).ready(function() {
 });
 
 function loadStationsData() {
-    $.get('/api/stations')
+    $.get('/api/stations', { data_source: getDataSource() })
         .done(function(stations) {
+            stations = stations.filter(s => !EXCLUDED_STATIONS.includes(s.station_name));
             allStations = stations;
             populateStationSelect(stations);
         })
@@ -422,7 +470,7 @@ function loadStationsData() {
 }
 
 function loadSpeciesData() {
-    $.get('/api/species')
+    $.get('/api/species', { data_source: getDataSource() })
         .done(function(species) {
             allSpecies = species; // Save complete list
             populateSpeciesSelect(species);
@@ -433,7 +481,7 @@ function loadSpeciesData() {
 }
 
 function loadPhasesData() {
-    $.get('/api/phases')
+    $.get('/api/phases', { data_source: getDataSource() })
         .done(function(phases) {
             allPhases = phases; // Save complete list
             populatePhaseSelect(phases);
@@ -503,7 +551,7 @@ function populatePhaseSelect(phases) {
 
 function filterPhasesBySpecies(speciesId) {
     // Get available phases for selected species
-    $.get(`/api/species-phases/${speciesId}`)
+    $.get(`/api/species-phases/${speciesId}`, { data_source: getDataSource() })
         .done(function(phases) {
             if (phases.length === 0) {
                 // If no data, show message but keep the dropdown enabled
@@ -524,7 +572,7 @@ function filterPhasesBySpecies(speciesId) {
 
 function filterSpeciesByPhase(phaseId) {
     // Get available species for selected phase
-    $.get('/api/species-by-phase', { phase_id: phaseId })
+    $.get('/api/species-by-phase', { phase_id: phaseId, data_source: getDataSource() })
         .done(function(species) {
             if (species.length === 0) {
                 // If no data, show message but keep the dropdown enabled
@@ -553,7 +601,7 @@ function applyTripleFilter(stationId, speciesId, phaseId) {
 
 // Station filtering functions
 function filterSpeciesByStation(stationId) {
-    $.get('/api/station-species', { station_id: stationId })
+    $.get('/api/station-species', { station_id: stationId, data_source: getDataSource() })
         .done(function(species) {
             if (species.length === 0) {
                 $('#species-select').html('<option value="">No species available for this station</option>');
@@ -568,7 +616,7 @@ function filterSpeciesByStation(stationId) {
 }
 
 function filterPhasesByStation(stationId) {
-    $.get('/api/station-phases', { station_id: stationId })
+    $.get('/api/station-phases', { station_id: stationId, data_source: getDataSource() })
         .done(function(phases) {
             if (phases.length === 0) {
                 $('#phase-select').html('<option value="">No phases available for this station</option>');
@@ -585,7 +633,8 @@ function filterPhasesByStation(stationId) {
 function filterPhasesByStationAndSpecies(stationId, speciesId) {
     $.get('/api/station-species-phases', {
         station_id: stationId,
-        species_id: speciesId
+        species_id: speciesId,
+        data_source: getDataSource()
     })
         .done(function(phases) {
             if (phases.length === 0) {
@@ -603,7 +652,8 @@ function filterPhasesByStationAndSpecies(stationId, speciesId) {
 function filterSpeciesByStationAndPhase(stationId, phaseId) {
     $.get('/api/station-phase-species', {
         station_id: stationId,
-        phase_id: phaseId
+        phase_id: phaseId,
+        data_source: getDataSource()
     })
         .done(function(species) {
             if (species.length === 0) {
@@ -620,7 +670,7 @@ function filterSpeciesByStationAndPhase(stationId, phaseId) {
 
 // Species and Phase filtering stations
 function filterStationsBySpecies(speciesId, phaseId) {
-    const params = { species_id: speciesId };
+    const params = { species_id: speciesId, data_source: getDataSource() };
     if (phaseId) params.phase_id = phaseId;
 
     $.get('/api/species-stations', params)
@@ -638,7 +688,7 @@ function filterStationsBySpecies(speciesId, phaseId) {
 }
 
 function filterStationsByPhase(phaseId, speciesId) {
-    const params = { phase_id: phaseId };
+    const params = { phase_id: phaseId, data_source: getDataSource() };
     if (speciesId) params.species_id = speciesId;
 
     $.get('/api/phase-stations', params)
@@ -658,7 +708,8 @@ function filterStationsByPhase(phaseId, speciesId) {
 function filterStationsBySpeciesAndPhase(speciesId, phaseId) {
     $.get('/api/species-phase-stations', {
         species_id: speciesId,
-        phase_id: phaseId
+        phase_id: phaseId,
+        data_source: getDataSource()
     })
         .done(function(stations) {
             if (stations.length === 0) {
@@ -690,11 +741,13 @@ function performAnalysis() {
     $('#analyze-btn').prop('disabled', true);
 
     // Prepare query parameters
+    const dataSource = $('#data-source-select').val();
     const queryParams = {
         species_id: speciesId,
         phase_id: phaseId,
         year_start: yearStart,
-        year_end: yearEnd
+        year_end: yearEnd,
+        data_source: dataSource
     };
 
     // Add station_id if a station is selected
@@ -963,11 +1016,13 @@ function detectAnomalies(data) {
 
 function loadObservationData(speciesId, phaseId, yearStart, yearEnd) {
     const stationId = $('#station-select').val();
+    const dataSource = $('#data-source-select').val();
     const queryParams = {
         species_id: speciesId,
         phase_id: phaseId,
         year_start: yearStart,
         year_end: yearEnd,
+        data_source: dataSource,
         limit: 500
     };
 

@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, send_file
 from flask_caching import Cache
 import psycopg2
 import json
+import csv
 from datetime import datetime, timedelta
 import os
 import re
@@ -75,10 +76,52 @@ def dict_fetchall(cursor):
     columns = [col[0] for col in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+def query_by_data_source(data_source, query_pheno, params_pheno, query_new=None, params_new=None):
+    """Run a query against pheno, pheno_new, or both databases and return combined results.
+    For pheno_new, if query_new is not provided, query_pheno is used.
+    """
+    results = []
+    if data_source in ('pheno', 'both'):
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute(query_pheno, params_pheno)
+                results.extend(dict_fetchall(cur))
+                cur.close()
+                conn.close()
+            except Exception as e:
+                if conn:
+                    conn.close()
+                raise e
+
+    if data_source in ('pheno_new', 'both'):
+        conn_new = get_db_connection_new()
+        if conn_new:
+            try:
+                cur = conn_new.cursor()
+                q = query_new if query_new else query_pheno
+                p = params_new if params_new is not None else params_pheno
+                cur.execute(q, p)
+                results.extend(dict_fetchall(cur))
+                cur.close()
+                conn_new.close()
+            except Exception as e:
+                if conn_new:
+                    conn_new.close()
+                raise e
+
+    return results
+
 @app.route('/')
 def index():
     """主页"""
     return render_template('index.html')
+
+@app.route('/new-data')
+def new_data():
+    """New Data page - opens index with new data modal"""
+    return render_template('index.html', open_new_data=True)
 
 @app.route('/geography')
 def geography():
@@ -143,15 +186,37 @@ def api_overview():
         # 时间范围
         cursor.execute("SELECT MIN(reference_year), MAX(reference_year) FROM dwd_observation")
         year_range = cursor.fetchone()
-        stats['year_range'] = f"{year_range[0]}-{year_range[1]}"
-        
+        pheno_min, pheno_max = year_range[0], year_range[1]
+
+        # 查询 pheno_new 时间范围
+        archive_min, archive_max = None, None
+        conn_new = get_db_connection_new()
+        if conn_new:
+            try:
+                cur_new = conn_new.cursor()
+                cur_new.execute("SELECT MIN(reference_year), MAX(reference_year) FROM dwd_observation")
+                new_range = cur_new.fetchone()
+                if new_range and new_range[0]:
+                    archive_min, archive_max = new_range[0], new_range[1]
+                cur_new.close()
+                conn_new.close()
+            except:
+                if conn_new:
+                    conn_new.close()
+
+        stats['pheno_basic_range'] = f"{pheno_min}-{pheno_max}"
+        if archive_min:
+            stats['pheno_archive_range'] = f"{archive_min}-{archive_max}"
+        else:
+            stats['pheno_archive_range'] = None
+
         # 最新观测
         cursor.execute("""
-            SELECT COUNT(*) FROM dwd_observation 
+            SELECT COUNT(*) FROM dwd_observation
             WHERE reference_year = (SELECT MAX(reference_year) FROM dwd_observation)
         """)
         stats['latest_year_observations'] = cursor.fetchone()[0]
-        
+
         cursor.close()
         conn.close()
         
@@ -162,28 +227,41 @@ def api_overview():
 
 @app.route('/api/stations')
 def api_stations():
-    """站点数据API - 使用物化视图优化性能"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """站点数据API - 支持 data_source 参数"""
+    data_source = request.args.get('data_source', 'pheno')
 
     try:
-        cursor = conn.cursor()
-
-        # 使用物化视图快速获取站点统计信息
-        cursor.execute("""
+        query_pheno = """
             SELECT
                 id, station_name, latitude, longitude,
                 altitude, state, area_group, area,
                 observation_count
             FROM mv_station_stats
             ORDER BY observation_count DESC
-        """)
+        """
+        query_new = """
+            SELECT
+                s.id, s.station_name, s.latitude, s.longitude,
+                s.altitude, s.state, s.area_group, s.area,
+                COUNT(o.id) as observation_count
+            FROM (SELECT DISTINCT ON (id) * FROM dwd_station ORDER BY id) s
+            JOIN dwd_observation o ON s.id = o.station_id
+            GROUP BY s.id, s.station_name, s.latitude, s.longitude,
+                     s.altitude, s.state, s.area_group, s.area
+            ORDER BY observation_count DESC
+        """
+        stations = query_by_data_source(data_source, query_pheno, [], query_new, [])
 
-        stations = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
+        # Deduplicate by station_name when combining both sources
+        if data_source == 'both':
+            seen = {}
+            for s in stations:
+                name = s['station_name']
+                if name not in seen:
+                    seen[name] = s
+                else:
+                    seen[name]['observation_count'] = int(seen[name]['observation_count']) + int(s['observation_count'])
+            stations = sorted(seen.values(), key=lambda x: int(x['observation_count']), reverse=True)
 
         return jsonify(stations)
 
@@ -192,16 +270,11 @@ def api_stations():
 
 @app.route('/api/species')
 def api_species():
-    """物种数据API - 使用物化视图优化性能"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """物种数据API - 支持 data_source 参数"""
+    data_source = request.args.get('data_source', 'pheno')
 
     try:
-        cursor = conn.cursor()
-
-        # 使用物化视图快速获取物种统计信息
-        cursor.execute("""
+        query_pheno = """
             SELECT
                 s.id, s.species_name_de, s.species_name_en, s.species_name_la,
                 sg.group_name,
@@ -209,12 +282,28 @@ def api_species():
             FROM mv_species_stats s
             LEFT JOIN dwd_species_group sg ON s.id = sg.species_id
             ORDER BY observation_count DESC
-        """)
+        """
+        query_new = """
+            SELECT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                NULL as group_name,
+                COUNT(o.id) as observation_count
+            FROM (SELECT DISTINCT ON (id) * FROM dwd_species ORDER BY id) s
+            JOIN dwd_observation o ON s.id = o.species_id
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """
+        species = query_by_data_source(data_source, query_pheno, [], query_new, [])
 
-        species = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
+        if data_source == 'both':
+            seen = {}
+            for sp in species:
+                sid = sp['id']
+                if sid not in seen:
+                    seen[sid] = sp
+                else:
+                    seen[sid]['observation_count'] = int(seen[sid]['observation_count']) + int(sp['observation_count'])
+            species = sorted(seen.values(), key=lambda x: int(x['observation_count']), reverse=True)
 
         return jsonify(species)
 
@@ -223,27 +312,37 @@ def api_species():
 
 @app.route('/api/phases')
 def api_phases():
-    """物候期数据API - 使用物化视图优化性能"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """物候期数据API - 支持 data_source 参数"""
+    data_source = request.args.get('data_source', 'pheno')
 
     try:
-        cursor = conn.cursor()
-
-        # 使用物化视图快速获取物候期统计信息
-        cursor.execute("""
+        query_pheno = """
             SELECT
                 id, phase_name_de, phase_name_en,
                 observation_count
             FROM mv_phase_stats
             ORDER BY observation_count DESC
-        """)
+        """
+        query_new = """
+            SELECT
+                p.id, p.phase_name_de, p.phase_name_en,
+                COUNT(o.id) as observation_count
+            FROM (SELECT DISTINCT ON (id) * FROM dwd_phase ORDER BY id) p
+            JOIN dwd_observation o ON p.id = o.phase_id
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """
+        phases = query_by_data_source(data_source, query_pheno, [], query_new, [])
 
-        phases = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
+        if data_source == 'both':
+            seen = {}
+            for ph in phases:
+                pid = ph['id']
+                if pid not in seen:
+                    seen[pid] = ph
+                else:
+                    seen[pid]['observation_count'] = int(seen[pid]['observation_count']) + int(ph['observation_count'])
+            phases = sorted(seen.values(), key=lambda x: int(x['observation_count']), reverse=True)
 
         return jsonify(phases)
 
@@ -252,26 +351,21 @@ def api_phases():
 
 @app.route('/api/observations')
 def api_observations():
-    """观测数据API（支持筛选）"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
-    
-    try:
-        cursor = conn.cursor()
-        
-        # 获取筛选参数
-        station_id = request.args.get('station_id')
-        species_id = request.args.get('species_id')
-        phase_id = request.args.get('phase_id')
-        year_start = request.args.get('year_start')
-        year_end = request.args.get('year_end')
-        limit = int(request.args.get('limit', 1000))
-        
-        # 构建查询
+    """观测数据API（支持筛选）- supports pheno, pheno_new, or both data sources"""
+    data_source = request.args.get('data_source', 'pheno')
+
+    # 获取筛选参数
+    station_id = request.args.get('station_id')
+    species_id = request.args.get('species_id')
+    phase_id = request.args.get('phase_id')
+    year_start = request.args.get('year_start')
+    year_end = request.args.get('year_end')
+    limit = int(request.args.get('limit', 1000))
+
+    def build_obs_query(deduplicate_refs=False):
         where_conditions = []
         params = []
-        
+
         if station_id:
             where_conditions.append("o.station_id = %s")
             params.append(station_id)
@@ -287,56 +381,96 @@ def api_observations():
         if year_end:
             where_conditions.append("o.reference_year <= %s")
             params.append(year_end)
-        
+
         where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-        
-        query = f"""
-            SELECT 
-                o.id, o.station_id, o.reference_year, o.species_id, 
-                o.phase_id, o.date, o.day_of_year,
-                st.station_name, st.latitude, st.longitude,
-                sp.species_name_en, sp.species_name_de,
-                ph.phase_name_en, ph.phase_name_de
-            FROM dwd_observation o
-            JOIN dwd_station st ON o.station_id = st.id
-            JOIN dwd_species sp ON o.species_id = sp.id
-            JOIN dwd_phase ph ON o.phase_id = ph.id
-            {where_clause}
-            ORDER BY o.reference_year DESC, o.day_of_year
-            LIMIT %s
-        """
-        
+
+        # pheno_new has duplicate rows in species/phase/station tables,
+        # so use DISTINCT ON subqueries to avoid row multiplication
+        if deduplicate_refs:
+            query = f"""
+                SELECT
+                    o.id, o.station_id, o.reference_year, o.species_id,
+                    o.phase_id, o.date, o.day_of_year,
+                    st.station_name, st.latitude, st.longitude,
+                    sp.species_name_en, sp.species_name_de,
+                    ph.phase_name_en, ph.phase_name_de
+                FROM dwd_observation o
+                JOIN (SELECT DISTINCT ON (id) id, station_name, latitude, longitude FROM dwd_station ORDER BY id) st ON o.station_id = st.id
+                JOIN (SELECT DISTINCT ON (id) id, species_name_en, species_name_de FROM dwd_species ORDER BY id) sp ON o.species_id = sp.id
+                JOIN (SELECT DISTINCT ON (id) id, phase_name_en, phase_name_de FROM dwd_phase ORDER BY id) ph ON o.phase_id = ph.id
+                {where_clause}
+                ORDER BY o.reference_year DESC, o.day_of_year
+                LIMIT %s
+            """
+        else:
+            query = f"""
+                SELECT
+                    o.id, o.station_id, o.reference_year, o.species_id,
+                    o.phase_id, o.date, o.day_of_year,
+                    st.station_name, st.latitude, st.longitude,
+                    sp.species_name_en, sp.species_name_de,
+                    ph.phase_name_en, ph.phase_name_de
+                FROM dwd_observation o
+                JOIN dwd_station st ON o.station_id = st.id
+                JOIN dwd_species sp ON o.species_id = sp.id
+                JOIN dwd_phase ph ON o.phase_id = ph.id
+                {where_clause}
+                ORDER BY o.reference_year DESC, o.day_of_year
+                LIMIT %s
+            """
         params.append(limit)
-        cursor.execute(query, params)
-        
-        observations = dict_fetchall(cursor)
-        
-        cursor.close()
-        conn.close()
-        
-        return jsonify(observations)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return query, params
+
+    all_observations = []
+
+    if data_source in ('pheno', 'both'):
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        try:
+            cursor = conn.cursor()
+            query, params = build_obs_query()
+            cursor.execute(query, params)
+            all_observations.extend(dict_fetchall(cursor))
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    if data_source in ('pheno_new', 'both'):
+        conn_new = get_db_connection_new()
+        if not conn_new:
+            return jsonify({'error': 'Pheno_new database connection failed'}), 500
+        try:
+            cursor_new = conn_new.cursor()
+            query, params = build_obs_query(deduplicate_refs=True)
+            cursor_new.execute(query, params)
+            all_observations.extend(dict_fetchall(cursor_new))
+            cursor_new.close()
+            conn_new.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # Sort combined results and limit
+    all_observations.sort(key=lambda x: (x.get('reference_year', ''), x.get('day_of_year', '')), reverse=True)
+    all_observations = all_observations[:limit]
+
+    return jsonify(all_observations)
 
 @app.route('/api/trends')
 def api_trends():
-    """趋势分析API"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """趋势分析API - supports pheno, pheno_new, or both data sources"""
+    data_source = request.args.get('data_source', 'pheno')
+    species_id = request.args.get('species_id')
+    phase_id = request.args.get('phase_id')
+    station_id = request.args.get('station_id')
+    year_start = request.args.get('year_start')
+    year_end = request.args.get('year_end')
 
-    try:
-        cursor = conn.cursor()
+    if not species_id or not phase_id:
+        return jsonify({'error': 'species_id and phase_id are required'}), 400
 
-        species_id = request.args.get('species_id')
-        phase_id = request.args.get('phase_id')
-        station_id = request.args.get('station_id')
-
-        if not species_id or not phase_id:
-            return jsonify({'error': 'species_id and phase_id are required'}), 400
-
-        # Build query with optional station filter
+    def build_trends_query(params_list):
         query = """
             SELECT
                 reference_year,
@@ -345,28 +479,75 @@ def api_trends():
             FROM dwd_observation
             WHERE species_id = %s AND phase_id = %s
         """
-        params = [species_id, phase_id]
+        params_list.extend([species_id, phase_id])
 
         if station_id:
             query += " AND station_id = %s"
-            params.append(station_id)
+            params_list.append(station_id)
+        if year_start:
+            query += " AND reference_year >= %s"
+            params_list.append(year_start)
+        if year_end:
+            query += " AND reference_year <= %s"
+            params_list.append(year_end)
 
         query += """
             GROUP BY reference_year
             ORDER BY reference_year
         """
+        return query
 
-        cursor.execute(query, params)
+    all_trends = []
 
-        trends = dict_fetchall(cursor)
+    if data_source in ('pheno', 'both'):
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        try:
+            cursor = conn.cursor()
+            params = []
+            query = build_trends_query(params)
+            cursor.execute(query, params)
+            all_trends.extend(dict_fetchall(cursor))
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-        cursor.close()
-        conn.close()
+    if data_source in ('pheno_new', 'both'):
+        conn_new = get_db_connection_new()
+        if not conn_new:
+            return jsonify({'error': 'Pheno_new database connection failed'}), 500
+        try:
+            cursor_new = conn_new.cursor()
+            params = []
+            query = build_trends_query(params)
+            cursor_new.execute(query, params)
+            all_trends.extend(dict_fetchall(cursor_new))
+            cursor_new.close()
+            conn_new.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-        return jsonify(trends)
+    # If both sources, aggregate by reference_year
+    if data_source == 'both' and all_trends:
+        aggregated = {}
+        for row in all_trends:
+            yr = row['reference_year']
+            if yr not in aggregated:
+                aggregated[yr] = {'reference_year': yr, 'total_day': 0, 'total_count': 0}
+            aggregated[yr]['total_day'] += float(row['avg_day_of_year']) * int(row['observation_count'])
+            aggregated[yr]['total_count'] += int(row['observation_count'])
+        all_trends = [
+            {
+                'reference_year': v['reference_year'],
+                'avg_day_of_year': v['total_day'] / v['total_count'] if v['total_count'] > 0 else 0,
+                'observation_count': v['total_count']
+            }
+            for v in sorted(aggregated.values(), key=lambda x: x['reference_year'])
+        ]
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify(all_trends)
 
 @app.route('/api/quality')
 def api_quality():
@@ -419,20 +600,14 @@ def api_quality():
 
 @app.route('/api/species-by-phase')
 def api_species_by_phase():
-    """根据phase搜索species API"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
-    
+    """根据phase搜索species API - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    phase_id = request.args.get('phase_id')
+    if not phase_id:
+        return jsonify({'error': 'phase_id is required'}), 400
+
     try:
-        cursor = conn.cursor()
-        
-        phase_id = request.args.get('phase_id')
-        if not phase_id:
-            return jsonify({'error': 'phase_id is required'}), 400
-        
-        # 查询具有指定phase的所有species
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 s.id, s.species_name_de, s.species_name_en, s.species_name_la,
                 sg.group_name,
@@ -446,30 +621,32 @@ def api_species_by_phase():
             WHERE o.phase_id = %s
             GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la, sg.group_name
             ORDER BY observation_count DESC
-        """, (phase_id,))
-        
-        species = dict_fetchall(cursor)
-        
-        cursor.close()
-        conn.close()
-        
-        return jsonify(species)
-        
+        """
+        query_new = """
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                NULL as group_name,
+                COUNT(DISTINCT o.id) as observation_count,
+                COUNT(DISTINCT o.station_id) as station_count,
+                MIN(o.reference_year) as first_year,
+                MAX(o.reference_year) as last_year
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_species ORDER BY id) s ON o.species_id = s.id
+            WHERE o.phase_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, [phase_id], query_new, [phase_id]))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/species-phases/<species_id>')
 def api_species_phases(species_id):
-    """获取特定species的所有phases"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取特定species的所有phases - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
 
     try:
-        cursor = conn.cursor()
-
-        # 获取该species的所有phases及其观测统计
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 p.id as phase_id,
                 p.phase_name_de,
@@ -483,33 +660,36 @@ def api_species_phases(species_id):
             WHERE o.species_id = %s
             GROUP BY p.id, p.phase_name_de, p.phase_name_en
             ORDER BY observation_count DESC
-        """, (species_id,))
-
-        phases = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(phases)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                p.id as phase_id,
+                p.phase_name_de,
+                p.phase_name_en,
+                COUNT(o.id) as observation_count,
+                MIN(o.reference_year) as first_year,
+                MAX(o.reference_year) as last_year,
+                AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_phase ORDER BY id) p ON o.phase_id = p.id
+            WHERE o.species_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, [species_id], query_new, [species_id]))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/station-species')
 def api_station_species():
-    """获取指定站点的所有物种"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取指定站点的所有物种 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    station_id = request.args.get('station_id')
+    if not station_id:
+        return jsonify({'error': 'station_id is required'}), 400
 
     try:
-        cursor = conn.cursor()
-
-        station_id = request.args.get('station_id')
-        if not station_id:
-            return jsonify({'error': 'station_id is required'}), 400
-
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 s.id, s.species_name_de, s.species_name_en, s.species_name_la,
                 COUNT(o.id) as observation_count
@@ -518,33 +698,31 @@ def api_station_species():
             WHERE o.station_id = %s
             GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
             ORDER BY observation_count DESC
-        """, (station_id,))
-
-        species = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(species)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_species ORDER BY id) s ON o.species_id = s.id
+            WHERE o.station_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, [station_id], query_new, [station_id]))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/station-phases')
 def api_station_phases():
-    """获取指定站点的所有物候期"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取指定站点的所有物候期 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    station_id = request.args.get('station_id')
+    if not station_id:
+        return jsonify({'error': 'station_id is required'}), 400
 
     try:
-        cursor = conn.cursor()
-
-        station_id = request.args.get('station_id')
-        if not station_id:
-            return jsonify({'error': 'station_id is required'}), 400
-
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 p.id, p.phase_name_de, p.phase_name_en,
                 COUNT(o.id) as observation_count
@@ -553,74 +731,67 @@ def api_station_phases():
             WHERE o.station_id = %s
             GROUP BY p.id, p.phase_name_de, p.phase_name_en
             ORDER BY observation_count DESC
-        """, (station_id,))
-
-        phases = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(phases)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                p.id, p.phase_name_de, p.phase_name_en,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_phase ORDER BY id) p ON o.phase_id = p.id
+            WHERE o.station_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, [station_id], query_new, [station_id]))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/station-species-phases')
 def api_station_species_phases():
-    """获取指定站点和物种的所有物候期"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取指定站点和物种的所有物候期 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    station_id = request.args.get('station_id')
+    species_id = request.args.get('species_id')
+    if not station_id or not species_id:
+        return jsonify({'error': 'station_id and species_id are required'}), 400
 
     try:
-        cursor = conn.cursor()
-
-        station_id = request.args.get('station_id')
-        species_id = request.args.get('species_id')
-
-        if not station_id or not species_id:
-            return jsonify({'error': 'station_id and species_id are required'}), 400
-
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
-                p.id as phase_id,
-                p.phase_name_de,
-                p.phase_name_en,
+                p.id as phase_id, p.phase_name_de, p.phase_name_en,
                 COUNT(o.id) as observation_count
             FROM dwd_observation o
             JOIN dwd_phase p ON o.phase_id = p.id
             WHERE o.station_id = %s AND o.species_id = %s
             GROUP BY p.id, p.phase_name_de, p.phase_name_en
             ORDER BY observation_count DESC
-        """, (station_id, species_id))
-
-        phases = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(phases)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                p.id as phase_id, p.phase_name_de, p.phase_name_en,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_phase ORDER BY id) p ON o.phase_id = p.id
+            WHERE o.station_id = %s AND o.species_id = %s
+            GROUP BY p.id, p.phase_name_de, p.phase_name_en
+            ORDER BY observation_count DESC
+        """
+        params = [station_id, species_id]
+        return jsonify(query_by_data_source(data_source, query_pheno, params, query_new, list(params)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/station-phase-species')
 def api_station_phase_species():
-    """获取指定站点和物候期的所有物种"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取指定站点和物候期的所有物种 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    station_id = request.args.get('station_id')
+    phase_id = request.args.get('phase_id')
+    if not station_id or not phase_id:
+        return jsonify({'error': 'station_id and phase_id are required'}), 400
 
     try:
-        cursor = conn.cursor()
-
-        station_id = request.args.get('station_id')
-        phase_id = request.args.get('phase_id')
-
-        if not station_id or not phase_id:
-            return jsonify({'error': 'station_id and phase_id are required'}), 400
-
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 s.id, s.species_name_de, s.species_name_en, s.species_name_la,
                 COUNT(o.id) as observation_count
@@ -629,127 +800,107 @@ def api_station_phase_species():
             WHERE o.station_id = %s AND o.phase_id = %s
             GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
             ORDER BY observation_count DESC
-        """, (station_id, phase_id))
-
-        species = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(species)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                s.id, s.species_name_de, s.species_name_en, s.species_name_la,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_species ORDER BY id) s ON o.species_id = s.id
+            WHERE o.station_id = %s AND o.phase_id = %s
+            GROUP BY s.id, s.species_name_de, s.species_name_en, s.species_name_la
+            ORDER BY observation_count DESC
+        """
+        params = [station_id, phase_id]
+        return jsonify(query_by_data_source(data_source, query_pheno, params, query_new, list(params)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/species-stations')
 def api_species_stations():
-    """获取有指定物种观测数据的所有站点"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取有指定物种观测数据的所有站点 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    species_id = request.args.get('species_id')
+    phase_id = request.args.get('phase_id')
+    if not species_id:
+        return jsonify({'error': 'species_id is required'}), 400
 
     try:
-        cursor = conn.cursor()
+        where_extra = " AND o.phase_id = %s" if phase_id else ""
+        params = [species_id, phase_id] if phase_id else [species_id]
 
-        species_id = request.args.get('species_id')
-        phase_id = request.args.get('phase_id')
-
-        if not species_id:
-            return jsonify({'error': 'species_id is required'}), 400
-
-        query = """
+        query_pheno = f"""
             SELECT DISTINCT
                 st.id, st.station_name, st.state, st.latitude, st.longitude,
                 COUNT(o.id) as observation_count
             FROM dwd_observation o
             JOIN dwd_station st ON o.station_id = st.id
-            WHERE o.species_id = %s
-        """
-        params = [species_id]
-
-        if phase_id:
-            query += " AND o.phase_id = %s"
-            params.append(phase_id)
-
-        query += """
+            WHERE o.species_id = %s{where_extra}
             GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
             ORDER BY observation_count DESC
         """
-
-        cursor.execute(query, params)
-        stations = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(stations)
-
+        query_new = f"""
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_station ORDER BY id) st ON o.station_id = st.id
+            WHERE o.species_id = %s{where_extra}
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, params, query_new, list(params)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/phase-stations')
 def api_phase_stations():
-    """获取有指定物候期观测数据的所有站点"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取有指定物候期观测数据的所有站点 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    phase_id = request.args.get('phase_id')
+    species_id = request.args.get('species_id')
+    if not phase_id:
+        return jsonify({'error': 'phase_id is required'}), 400
 
     try:
-        cursor = conn.cursor()
+        where_extra = " AND o.species_id = %s" if species_id else ""
+        params = [phase_id, species_id] if species_id else [phase_id]
 
-        phase_id = request.args.get('phase_id')
-        species_id = request.args.get('species_id')
-
-        if not phase_id:
-            return jsonify({'error': 'phase_id is required'}), 400
-
-        query = """
+        query_pheno = f"""
             SELECT DISTINCT
                 st.id, st.station_name, st.state, st.latitude, st.longitude,
                 COUNT(o.id) as observation_count
             FROM dwd_observation o
             JOIN dwd_station st ON o.station_id = st.id
-            WHERE o.phase_id = %s
-        """
-        params = [phase_id]
-
-        if species_id:
-            query += " AND o.species_id = %s"
-            params.append(species_id)
-
-        query += """
+            WHERE o.phase_id = %s{where_extra}
             GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
             ORDER BY observation_count DESC
         """
-
-        cursor.execute(query, params)
-        stations = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(stations)
-
+        query_new = f"""
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_station ORDER BY id) st ON o.station_id = st.id
+            WHERE o.phase_id = %s{where_extra}
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """
+        return jsonify(query_by_data_source(data_source, query_pheno, params, query_new, list(params)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/species-phase-stations')
 def api_species_phase_stations():
-    """获取有指定物种和物候期观测数据的所有站点"""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+    """获取有指定物种和物候期观测数据的所有站点 - 支持 data_source"""
+    data_source = request.args.get('data_source', 'pheno')
+    species_id = request.args.get('species_id')
+    phase_id = request.args.get('phase_id')
+    if not species_id or not phase_id:
+        return jsonify({'error': 'species_id and phase_id are required'}), 400
 
     try:
-        cursor = conn.cursor()
-
-        species_id = request.args.get('species_id')
-        phase_id = request.args.get('phase_id')
-
-        if not species_id or not phase_id:
-            return jsonify({'error': 'species_id and phase_id are required'}), 400
-
-        cursor.execute("""
+        query_pheno = """
             SELECT DISTINCT
                 st.id, st.station_name, st.state, st.latitude, st.longitude,
                 COUNT(o.id) as observation_count
@@ -758,15 +909,19 @@ def api_species_phase_stations():
             WHERE o.species_id = %s AND o.phase_id = %s
             GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
             ORDER BY observation_count DESC
-        """, (species_id, phase_id))
-
-        stations = dict_fetchall(cursor)
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(stations)
-
+        """
+        query_new = """
+            SELECT DISTINCT
+                st.id, st.station_name, st.state, st.latitude, st.longitude,
+                COUNT(o.id) as observation_count
+            FROM dwd_observation o
+            JOIN (SELECT DISTINCT ON (id) * FROM dwd_station ORDER BY id) st ON o.station_id = st.id
+            WHERE o.species_id = %s AND o.phase_id = %s
+            GROUP BY st.id, st.station_name, st.state, st.latitude, st.longitude
+            ORDER BY observation_count DESC
+        """
+        params = [species_id, phase_id]
+        return jsonify(query_by_data_source(data_source, query_pheno, params, query_new, list(params)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1293,7 +1448,7 @@ def api_data_distribution_detailed():
         return jsonify({'error': str(e)}), 500
 
 # Transcription Editor API endpoints
-TRANSCRIPTION_BASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Transskriptionen')
+TRANSCRIPTION_BASE_PATH = '/Users/puzhen/Downloads/corrected'
 
 @app.route('/api/transcription/folders')
 def api_transcription_folders():
@@ -1308,9 +1463,11 @@ def api_transcription_folders():
                 match = re.match(r'^(\d+)', folder.name)
                 index = match.group(1) if match else None
                 
-                # Check for files
-                has_odt = any(f.suffix == '.odt' for f in folder.iterdir() if f.is_file())
-                has_tif = any(f.suffix == '.tif' for f in folder.iterdir() if f.is_file())
+                # Check for files (odt can be direct .odt or .zip containing .odt)
+                files_in_folder = [f for f in folder.iterdir() if f.is_file()]
+                has_odt = any(f.suffix == '.odt' for f in files_in_folder) or \
+                          any(f.suffix == '.zip' for f in files_in_folder)
+                has_tif = any(f.suffix == '.tif' for f in files_in_folder)
                 is_tabelle = 'Tabelle' in folder.name
                 
                 folders.append({
@@ -1341,6 +1498,12 @@ def api_transcription_folder_contents(folder_name):
                         'name': file.name,
                         'type': file.suffix[1:]  # Remove the dot
                     })
+                elif file.suffix == '.zip':
+                    # Treat zip files containing odt as odt files
+                    files.append({
+                        'name': file.name,
+                        'type': 'odt'
+                    })
         
         return jsonify({'files': files})
     except Exception as e:
@@ -1366,14 +1529,27 @@ def api_transcription_image(folder_name, file_name):
 
 @app.route('/api/transcription/odt/<path:folder_name>/<path:file_name>')
 def api_transcription_odt(folder_name, file_name):
-    """Get ODT file content"""
+    """Get ODT file content (supports .odt and .zip containing .odt)"""
     try:
         file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
         if not file_path.exists():
             return jsonify({'error': 'File not found'}), 404
-        
-        # Extract tables from ODT
-        doc = load(str(file_path))
+
+        # Handle zip files containing odt
+        if file_path.suffix == '.zip':
+            import zipfile
+            import tempfile
+            with zipfile.ZipFile(str(file_path), 'r') as zf:
+                odt_names = [n for n in zf.namelist() if n.endswith('.odt')]
+                if not odt_names:
+                    return jsonify({'error': 'No ODT file found in zip'}), 404
+                with tempfile.NamedTemporaryFile(suffix='.odt', delete=False) as tmp:
+                    tmp.write(zf.read(odt_names[0]))
+                    tmp_path = tmp.name
+            doc = load(tmp_path)
+            os.unlink(tmp_path)
+        else:
+            doc = load(str(file_path))
         tables = []
         raw_content = []
         
@@ -1390,19 +1566,30 @@ def api_transcription_odt(folder_name, file_name):
                     cell_text = ""
                     for p in cell.getElementsByType(text.P):
                         cell_text += teletype.extractText(p)
-                    
+
                     repeat = cell.getAttribute("numbercolumnsrepeated")
-                    if repeat:
-                        repeat_count = int(repeat)
-                    else:
-                        repeat_count = 1
-                    
+                    repeat_count = int(repeat) if repeat else 1
+
+                    colspan = cell.getAttribute("numbercolumnsspanned")
+                    colspan_count = int(colspan) if colspan else 1
+
+                    rowspan = cell.getAttribute("numberrowsspanned")
+                    rowspan_count = int(rowspan) if rowspan else 1
+
                     for _ in range(repeat_count):
-                        row_data.append(cell_text.strip())
-                
+                        if colspan_count > 1 or rowspan_count > 1:
+                            cell_obj = {'text': cell_text.strip()}
+                            if colspan_count > 1:
+                                cell_obj['colspan'] = colspan_count
+                            if rowspan_count > 1:
+                                cell_obj['rowspan'] = rowspan_count
+                            row_data.append(cell_obj)
+                        else:
+                            row_data.append(cell_text.strip())
+
                 if row_data:
                     table_data.append(row_data)
-            
+
             if table_data:
                 tables.append(table_data)
         
@@ -1500,6 +1687,25 @@ def api_transcription_add_annotation():
             'id': result[0],
             'created_at': result[1].isoformat()
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/species-mapping')
+def api_species_mapping():
+    """Read species mapping from final_species_mapping.csv and return as JSON"""
+    try:
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'final_species_mapping.csv')
+        if not os.path.exists(csv_path):
+            return jsonify({'error': 'Species mapping file not found'}), 404
+
+        rows = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+
+        return jsonify({'data': rows})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
