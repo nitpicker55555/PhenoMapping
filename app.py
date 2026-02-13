@@ -1448,7 +1448,7 @@ def api_data_distribution_detailed():
         return jsonify({'error': str(e)}), 500
 
 # Transcription Editor API endpoints
-TRANSCRIPTION_BASE_PATH = '/Users/puzhen/Downloads/corrected'
+TRANSCRIPTION_BASE_PATH = os.environ.get('TRANSCRIPTION_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'corrected'))
 
 @app.route('/api/transcription/folders')
 def api_transcription_folders():
