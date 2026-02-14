@@ -17,6 +17,10 @@ import io
 from odt_editor import ODTEditor
 from geocoder import geocode_location
 import unicodedata
+import zipfile
+import tempfile
+from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 
 # Load city to state mapping for pheno_new historical data
 CITY_STATE_MAPPING = {}
@@ -1527,74 +1531,139 @@ def api_transcription_image(folder_name, file_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def _extract_odt_tables(file_path):
+    """Extract tables and text from an ODT file"""
+    doc = load(str(file_path))
+    tables = []
+    raw_content = []
+
+    for p in doc.getElementsByType(text.P):
+        raw_content.append(teletype.extractText(p))
+
+    for table in doc.getElementsByType(Table):
+        table_data = []
+        for row in table.getElementsByType(TableRow):
+            row_data = []
+            for cell in row.getElementsByType(TableCell):
+                cell_text = ""
+                for p in cell.getElementsByType(text.P):
+                    cell_text += teletype.extractText(p)
+
+                repeat = cell.getAttribute("numbercolumnsrepeated")
+                repeat_count = int(repeat) if repeat else 1
+                colspan = cell.getAttribute("numbercolumnsspanned")
+                colspan_count = int(colspan) if colspan else 1
+                rowspan = cell.getAttribute("numberrowsspanned")
+                rowspan_count = int(rowspan) if rowspan else 1
+
+                for _ in range(repeat_count):
+                    if colspan_count > 1 or rowspan_count > 1:
+                        cell_obj = {'text': cell_text.strip()}
+                        if colspan_count > 1:
+                            cell_obj['colspan'] = colspan_count
+                        if rowspan_count > 1:
+                            cell_obj['rowspan'] = rowspan_count
+                        row_data.append(cell_obj)
+                    else:
+                        row_data.append(cell_text.strip())
+
+            if row_data:
+                table_data.append(row_data)
+        if table_data:
+            tables.append(table_data)
+
+    return tables, '\n'.join(raw_content)
+
+
+def _extract_docx_tables(file_path):
+    """Extract tables and text from a DOCX file"""
+    doc = DocxDocument(str(file_path))
+    tables = []
+    raw_content = []
+
+    for para in doc.paragraphs:
+        if para.text.strip():
+            raw_content.append(para.text.strip())
+
+    for table in doc.tables:
+        table_data = []
+        for row in table.rows:
+            row_data = []
+            seen_tcs = set()
+            for cell in row.cells:
+                tc = cell._tc
+                tc_id = id(tc)
+                if tc_id in seen_tcs:
+                    continue
+                seen_tcs.add(tc_id)
+
+                cell_text = cell.text.strip()
+                tc_pr = tc.find(qn('w:tcPr'))
+                colspan = 1
+                rowspan = 1
+                if tc_pr is not None:
+                    gs = tc_pr.find(qn('w:gridSpan'))
+                    if gs is not None:
+                        colspan = int(gs.get(qn('w:val'), '1'))
+                    vm = tc_pr.find(qn('w:vMerge'))
+                    if vm is not None:
+                        val = vm.get(qn('w:val'), '')
+                        if val == 'restart':
+                            rowspan = 2
+                        else:
+                            continue  # Skip continuation cells
+
+                if colspan > 1 or rowspan > 1:
+                    cell_obj = {'text': cell_text}
+                    if colspan > 1:
+                        cell_obj['colspan'] = colspan
+                    if rowspan > 1:
+                        cell_obj['rowspan'] = rowspan
+                    row_data.append(cell_obj)
+                else:
+                    row_data.append(cell_text)
+
+            if row_data:
+                table_data.append(row_data)
+        if table_data:
+            tables.append(table_data)
+
+    return tables, '\n'.join(raw_content)
+
+
 @app.route('/api/transcription/odt/<path:folder_name>/<path:file_name>')
 def api_transcription_odt(folder_name, file_name):
-    """Get ODT file content (supports .odt and .zip containing .odt)"""
+    """Get document content (supports .odt, .docx, and .zip containing either)"""
     try:
         file_path = Path(TRANSCRIPTION_BASE_PATH) / folder_name / file_name
         if not file_path.exists():
             return jsonify({'error': 'File not found'}), 404
 
-        # Handle zip files containing odt
         if file_path.suffix == '.zip':
-            import zipfile
-            import tempfile
             with zipfile.ZipFile(str(file_path), 'r') as zf:
                 odt_names = [n for n in zf.namelist() if n.endswith('.odt')]
-                if not odt_names:
-                    return jsonify({'error': 'No ODT file found in zip'}), 404
-                with tempfile.NamedTemporaryFile(suffix='.odt', delete=False) as tmp:
-                    tmp.write(zf.read(odt_names[0]))
-                    tmp_path = tmp.name
-            doc = load(tmp_path)
-            os.unlink(tmp_path)
+                docx_names = [n for n in zf.namelist() if n.endswith('.docx')]
+                if odt_names:
+                    with tempfile.NamedTemporaryFile(suffix='.odt', delete=False) as tmp:
+                        tmp.write(zf.read(odt_names[0]))
+                        tmp_path = tmp.name
+                    tables, raw_content = _extract_odt_tables(tmp_path)
+                    os.unlink(tmp_path)
+                elif docx_names:
+                    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+                        tmp.write(zf.read(docx_names[0]))
+                        tmp_path = tmp.name
+                    tables, raw_content = _extract_docx_tables(tmp_path)
+                    os.unlink(tmp_path)
+                else:
+                    return jsonify({'error': 'No ODT or DOCX file found in zip'}), 404
+        elif file_path.suffix == '.docx':
+            tables, raw_content = _extract_docx_tables(file_path)
         else:
-            doc = load(str(file_path))
-        tables = []
-        raw_content = []
-        
-        # Extract all text
-        for p in doc.getElementsByType(text.P):
-            raw_content.append(teletype.extractText(p))
-        
-        # Extract tables
-        for table in doc.getElementsByType(Table):
-            table_data = []
-            for row in table.getElementsByType(TableRow):
-                row_data = []
-                for cell in row.getElementsByType(TableCell):
-                    cell_text = ""
-                    for p in cell.getElementsByType(text.P):
-                        cell_text += teletype.extractText(p)
+            tables, raw_content = _extract_odt_tables(file_path)
 
-                    repeat = cell.getAttribute("numbercolumnsrepeated")
-                    repeat_count = int(repeat) if repeat else 1
-
-                    colspan = cell.getAttribute("numbercolumnsspanned")
-                    colspan_count = int(colspan) if colspan else 1
-
-                    rowspan = cell.getAttribute("numberrowsspanned")
-                    rowspan_count = int(rowspan) if rowspan else 1
-
-                    for _ in range(repeat_count):
-                        if colspan_count > 1 or rowspan_count > 1:
-                            cell_obj = {'text': cell_text.strip()}
-                            if colspan_count > 1:
-                                cell_obj['colspan'] = colspan_count
-                            if rowspan_count > 1:
-                                cell_obj['rowspan'] = rowspan_count
-                            row_data.append(cell_obj)
-                        else:
-                            row_data.append(cell_text.strip())
-
-                if row_data:
-                    table_data.append(row_data)
-
-            if table_data:
-                tables.append(table_data)
-        
         return jsonify({
-            'raw_content': '\n'.join(raw_content),
+            'raw_content': raw_content,
             'tables': tables
         })
     except Exception as e:

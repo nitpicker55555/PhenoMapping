@@ -593,7 +593,7 @@
 
         // Merge consecutive header+data tables in ODT
         function mergeTables(tables) {
-            if (!tables || tables.length < 2) return tables;
+            if (!tables || tables.length === 0) return tables;
 
             const merged = [];
             let i = 0;
@@ -616,6 +616,20 @@
                 merged.push(tables[i]);
                 i++;
             }
+
+            // Detect DOCX-style tables with embedded 2-row headers:
+            // Row 0 has cells with colspans (group headers), Row 1 has more raw cells (sub-headers)
+            for (let t = 0; t < merged.length; t++) {
+                const table = merged[t];
+                if (table._headerRows || table.length < 3) continue;
+                const row0 = table[0];
+                const row1 = table[1];
+                const hasColspan = row0.some(cell => getCellColspan(cell) > 1);
+                if (hasColspan && row1.length > row0.length) {
+                    table._headerRows = 2;
+                }
+            }
+
             return merged;
         }
 
