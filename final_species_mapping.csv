@@ -1,0 +1,97 @@
+csv_original,db_species_id,db_german_name,db_latin_name,match_reason
+Sorbus aucuparia(Vogelbeere),103,Eberesche,Sorbus aucuparia,Exact Latin match: 'Sorbus aucuparia'
+Rectula alba (Birke),112,Hänge-Birke,Betula alba,Exact Latin match: 'Betula alba'
+Pinus larix(Lerche),105,Europäische Lärche,Larix decidua,Exact Latin match: 'Larix decidua'
+Corgulus avellana(Haselnuss),113,Hasel,Corylus avellana,Exact Latin match: 'Corylus avellana'
+Pyras communis(Holzbirn),322,"Birne, späte Reife",Pyrus communis,Exact Latin match: 'Pyrus communis'
+Pyrus malus(Holzapfel),322,"Birne, späte Reife",Pyrus communis,Latin genus match only: Pyrus → Pyrus communis
+Sambucus nigra (Gemeiner Hollunder),129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+Fragaria vesca(Gemeine Erdbeere),384,Erdbeere,Fragaria,Latin genus match only: Fragaria → Fragaria
+Aesculus Hyppocastanum(Roßkastanie),122,Rosskastanie,Aesculus hippocastanum,Exact Latin match: 'Aesculus hippocastanum'
+Sambucus nigra(Gemeiner Hollunder),129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+Prunus spinosa(Schlehe),125,Schlehe,Prunus spinosa,Exact Latin match: 'Prunus spinosa'
+Betula alba(Birke),112,Hänge-Birke,Betula alba,Exact Latin match: 'Betula alba'
+Corylus avellana(Haselnuss),113,Hasel,Corylus avellana,Exact Latin match: 'Corylus avellana'
+Winterroggen,203,Winterroggen,Secale cereale,Exact German match: 'Winterroggen'
+Winterweitzen,202,Winterweizen,Triticum aestivum,Special case: Weizen variant → Winterweizen
+"Lerche, Pinus larix",105,Europäische Lärche,Larix decidua,Exact Latin match: 'Larix decidua'
+"Birke, Betula alba",112,Hänge-Birke,Betula alba,Exact Latin match: 'Betula alba'
+"Vogelbeerbaum,Sorbus aucuparia",103,Eberesche,Sorbus aucuparia,Exact Latin match: 'Sorbus aucuparia'
+"Gemeiner Hollunder, Sambucus nigra",129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+"Weißdorn,Crataegus oxycantha",138,Zweigriffliger Weißdorn,Crataegus laevigata,Latin genus match only: Crataegus → Crataegus laevigata
+"Rothbuche,Fagus sylvatica",123,Rotbuche,Fagus sylvatica,Exact Latin match: 'Fagus sylvatica'
+"Saalweide,Salic caprea",124,Sal-Weide,Salix caprea,Exact Latin match: 'Salix caprea'
+Aesculus Hyppocastanum (Rosskastanie),122,Rosskastanie,Aesculus hippocastanum,Exact Latin match: 'Aesculus hippocastanum'
+Alnus glutinosa(Schwarzerle),128,Schwarz-Erle,Alnus glutinosa,Exact Latin match: 'Alnus glutinosa'
+Alnus incana(Weißerle),128,Schwarz-Erle,Alnus glutinosa,Latin genus match only: Alnus → Alnus glutinosa
+Coryllus avellana(Haselnuss),113,Hasel,Corylus avellana,Exact Latin match: 'Corylus avellana'
+Fagus sylvatica(Rotbirke),123,Rotbuche,Fagus sylvatica,Exact Latin match: 'Fagus sylvatica'
+Pinus abies(Weißtanne),133,Tanne,Abies alba,Exact German match: 'Tanne'
+Pinus picea(Fichte),107,Fichte,Picea abies,Exact German match: 'Fichte'
+Pinus sylvestris(Föher),118,Kiefer,Pinus sylvestris,Exact Latin match: 'Pinus sylvestris'
+Prunus avium(Süßkirsche),332,"Süßkirsche, späte Reife",Prunus avium,Exact Latin match: 'Prunus avium'
+Prunus padus(Traubenkirsche),134,Traubenkirsche,Prunus padus,Exact Latin match: 'Prunus padus'
+Prunus commuis(Holzbirn),125,Schlehe,Prunus spinosa,Latin genus match only: Prunus → Prunus spinosa
+Quereus robur(Trauben-Wintereiche),132,Stiel-Eiche,Quercus robur,Exact Latin match: 'Quercus robur'
+Sambucus racemosia(Rother),129,Schwarzer Holunder,Sambucus nigra,Latin genus match only: Sambucus → Sambucus nigra
+Sorbus aucuparia(Vogelbeerbaum),103,Eberesche,Sorbus aucuparia,Exact Latin match: 'Sorbus aucuparia'
+Fragaria resca(Gemeine Erdbeere),384,Erdbeere,Fragaria,Latin genus match only: Fragaria → Fragaria
+Schwarzer Hollunder,129,Schwarzer Holunder,Sambucus nigra,Exact German match: 'Schwarzer Holunder'
+Birke,111,Birke (alle Arten),Betula,Partial German match: 'Birke' → 'Birke (alle Arten)' (common: {'birke'})
+Schlehe,125,Schlehe,Prunus spinosa,Exact German match: 'Schlehe'
+Winterweizen,202,Winterweizen,Triticum aestivum,Exact German match: 'Winterweizen'
+Haber,208,Hafer,Avena sativa,Exact German match: 'Hafer'
+Schwarzerle,128,Schwarz-Erle,Alnus glutinosa,Exact German match: 'Schwarz-Erle'
+Weißtanne,133,Tanne,Abies alba,Exact German match: 'Tanne'
+Fichte,107,Fichte,Picea abies,Exact German match: 'Fichte'
+Himbeere,382,Himbeere,Rubus idaeus,Exact German match: 'Himbeere'
+Gemeiner Hollunder,129,Schwarzer Holunder,Sambucus nigra,Partial German match: 'Gemeiner Holunder' → 'Schwarzer Holunder' (common: {'holunder'})
+Gemeine Erdbeere,384,Erdbeere,Fragaria,Partial German match: 'Gemeine Erdbeere' → 'Erdbeere' (common: {'erdbeere'})
+Sambucus nigra: Schwarzer Hollunder,129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+Alnus glutinosa:Schwarzerle,128,Schwarz-Erle,Alnus glutinosa,Exact Latin match: 'Alnus glutinosa'
+Kobinia pseudoacacia:Gemeiner Robinin,121,Robinie,Robinia pseudoacacia,Exact Latin match: 'Robinia pseudoacacia'
+Roßkastanie,122,Rosskastanie,Aesculus hippocastanum,Exact German match: 'Rosskastanie'
+Föher,118,Kiefer,Pinus sylvestris,Exact German match: 'Kiefer'
+"Corylus avellana,(Haselnuß)",113,Hasel,Corylus avellana,Latin genus match only: Corylus → Corylus avellana
+"Alnus glutinosa,(Schwarzerle)",128,Schwarz-Erle,Alnus glutinosa,Exact German match: 'Schwarz-Erle'
+"Sambucus racemosa,(Rother)",129,Schwarzer Holunder,Sambucus nigra,Latin genus match only: Sambucus → Sambucus nigra
+"Aesculus Hyppocastanum,(Roßkastanie)",122,Rosskastanie,Aesculus hippocastanum,Exact German match: 'Rosskastanie'
+"Sambucus nigra,(Gemeiner Hollunder)",129,Schwarzer Holunder,Sambucus nigra,Latin genus match only: Sambucus → Sambucus nigra
+Acer Platanoides(Spitzahorn),131,Spitz-Ahorn,Acer platanoides,Exact Latin match: 'Acer Platanoides'
+Fagus silvatica(Rotbirke),123,Rotbuche,Fagus sylvatica,Latin genus match only: Fagus → Fagus sylvatica
+3. Schlehe,125,Schlehe,Prunus spinosa,Exact German match: 'Schlehe'
+12. Gemeiner Hollunder,129,Schwarzer Holunder,Sambucus nigra,Partial German match: 'Gemeiner Holunder' → 'Schwarzer Holunder' (common: {'holunder'})
+"Pinus larix, Lerche",105,Europäische Lärche,Larix decidua,Exact Latin match: 'Larix decidua'
+"Sambucus nigra,Gemeiner Hollunder",129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+"Betula alba,Birke",112,Hänge-Birke,Betula alba,Exact Latin match: 'Betula alba'
+"Corylus avellana,Haselnuß",113,Hasel,Corylus avellana,Exact Latin match: 'Corylus avellana'
+"Prunus spinosa,Schlehe",125,Schlehe,Prunus spinosa,Exact Latin match: 'Prunus spinosa'
+"Pinus abies, Weißtanne",133,Tanne,Abies alba,Exact German match: 'Tanne'
+"Pinus picea,Fichte",107,Fichte,Picea abies,Exact German match: 'Fichte'
+"Pinus sylvestris,Föher",118,Kiefer,Pinus sylvestris,Exact Latin match: 'Pinus sylvestris'
+"Pinus larix,Lerche",105,Europäische Lärche,Larix decidua,Exact Latin match: 'Larix decidua'
+"Sorbus aucuparia,Vogelbeerbaum",103,Eberesche,Sorbus aucuparia,Exact Latin match: 'Sorbus aucuparia'
+"Crataegus oxyacantha,Weißdorn",138,Zweigriffliger Weißdorn,Crataegus laevigata,Latin genus match only: Crataegus → Crataegus laevigata
+"Pyrus communis, Holzbirn",322,"Birne, späte Reife",Pyrus communis,Exact Latin match: 'Pyrus communis'
+"Erica vulgaris,Haide",114,Heidekraut,Calluna vulgaris,Exact Latin match: 'Calluna vulgaris'
+"Salix caprea,Saalweide",124,Sal-Weide,Salix caprea,Exact Latin match: 'Salix caprea'
+"Fragaria vesca,Gemeine Erdbeere",384,Erdbeere,Fragaria,Latin genus match only: Fragaria → Fragaria
+"Pyrus malus, Holzapfel",322,"Birne, späte Reife",Pyrus communis,Latin genus match only: Pyrus → Pyrus communis
+FichtePinus picea,107,Fichte,Picea abies,Exact German match: 'Fichte'
+Socbus aucuparia(Vogelbeere),103,Eberesche,Sorbus aucuparia,Exact Latin match: 'Sorbus aucuparia'
+Sambucus nigra(Schwarzer Holunder),129,Schwarzer Holunder,Sambucus nigra,Exact Latin match: 'Sambucus nigra'
+Prunus avium(Vogelkirsche),332,"Süßkirsche, späte Reife",Prunus avium,Exact Latin match: 'Prunus avium'
+Prunus spinosa(Schlehdorn),125,Schlehe,Prunus spinosa,Exact Latin match: 'Prunus spinosa'
+Erisa vulg:(Heidekräuter),114,Heidekraut,Calluna vulgaris,Exact German match: 'Heidekraut'
+Weidenroggen,203,Winterroggen,Secale cereale,Exact German match: 'Winterroggen'
+Berberis vulgaris (Berberisstrauch),4187,Berberitze,Berberis vulgaris,New species added for DOCX import
+Juniperus communis Wachholder,4188,Wacholder,Juniperus communis,New species added for DOCX import
+Liriodendron tulipifera Tulpenbaum,4189,Tulpenbaum,Liriodendron tulipifera,New species added for DOCX import
+Platanus acidentalis,4190,Platane,Platanus occidentalis,New species added for DOCX import
+Spartium scoparium,4191,Besenginster,Cytisus scoparius,New species added for DOCX import
+Viburnus opulus,4192,Gewöhnlicher Schneeball,Viburnum opulus,New species added for DOCX import
+"Do. Pavia Linn",4193,Rote Rosskastanie,Aesculus pavia,New species added for DOCX import
+"Do. (Schwarzpappel)",4194,Schwarzpappel,Populus nigra,New species added for DOCX import
+Ulmus campustris,4145,Feldulme,"Ulmus campestris,",Matched existing species (typo correction)
+Schwarzbeere Vaccinium Myrtillus,4154,"Idea, Preußelbeere",Vaccinium vitis,Matched existing species
+Winter-waizen,202,Winterweizen,Triticum aestivum,Matched existing species (spelling variant)
