@@ -1050,25 +1050,23 @@ def api_pheno_new_species_phases(species_name):
         new_year_span = (year_range[1] - year_range[0] + 1) if year_range and year_range[0] else 0
 
         if new_year_span <= 10:
-            # 10年以内：返回每个独立观测点
+            # 10年以内：返回按天去重的观测点
             cursor_new.execute(f"""
                 SELECT
                     p.phase_name_en,
                     p.phase_name_de,
-                    o.date as obs_date,
+                    CAST(o.date AS date) as obs_date,
                     CAST(o.day_of_year AS INTEGER) as day_of_year,
-                    CAST(o.reference_year AS INTEGER) as reference_year,
-                    st.station_name
+                    CAST(o.reference_year AS INTEGER) as reference_year
                 FROM dwd_observation o
                 JOIN dwd_phase p ON o.phase_id = p.id
-                LEFT JOIN dwd_station st ON o.station_id = st.id
                 WHERE o.species_id IN ({species_filter_sql})
                     AND o.date IS NOT NULL
-                ORDER BY p.phase_name_en, o.date
+                GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
+                ORDER BY p.phase_name_en, obs_date
             """, (species_name, species_name, species_name))
-            new_time_series_raw = dict_fetchall(cursor_new)
             new_time_series = []
-            new_individual_observations = new_time_series_raw
+            new_individual_observations = dict_fetchall(cursor_new)
         else:
             # 10年以上：按年份聚合
             cursor_new.execute(f"""
@@ -1130,21 +1128,20 @@ def api_pheno_new_species_phases(species_name):
             pheno_year_span = (pheno_year_range[1] - pheno_year_range[0] + 1) if pheno_year_range and pheno_year_range[0] else 0
 
             if pheno_year_span <= 10:
-                # 10年以内：返回每个独立观测点
+                # 10年以内：返回按天去重的观测点
                 cursor.execute(f"""
                     SELECT
                         p.phase_name_en,
                         p.phase_name_de,
-                        o.date as obs_date,
+                        CAST(o.date AS date) as obs_date,
                         CAST(o.day_of_year AS INTEGER) as day_of_year,
-                        CAST(o.reference_year AS INTEGER) as reference_year,
-                        st.station_name
+                        CAST(o.reference_year AS INTEGER) as reference_year
                     FROM dwd_observation o
                     JOIN dwd_phase p ON o.phase_id = p.id
-                    LEFT JOIN dwd_station st ON o.station_id = st.id
                     WHERE o.species_id IN ({placeholders})
                         AND o.date IS NOT NULL
-                    ORDER BY p.phase_name_en, o.date
+                    GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
+                    ORDER BY p.phase_name_en, obs_date
                 """, species_ids)
                 pheno_individual_observations = dict_fetchall(cursor)
             else:

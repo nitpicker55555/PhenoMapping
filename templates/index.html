@@ -271,6 +271,7 @@
                                 <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoNewChart"></canvas>
                                 </div>
+                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot with daily granularity (deduplicated by date) is displayed.</small>
                             </div>
                         </div>
                     </div>
@@ -299,6 +300,7 @@
                                 <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoChart"></canvas>
                                 </div>
+                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot with daily granularity (deduplicated by date) is displayed.</small>
                             </div>
                         </div>
                     </div>
@@ -700,7 +702,6 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
             phaseData[phaseName].push({
                 x: dateStr,
                 y: item.day_of_year,
-                station: item.station_name || ''
             });
         });
 
@@ -745,7 +746,6 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
                                 const d = new Date(pt.x);
                                 const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
                                 let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
-                                if (pt.station) label += ' @ ' + pt.station;
                                 return label;
                             }
                         }
@@ -857,7 +857,6 @@ function createPhenoChart(data, startYear = null, endYear = null) {
             phaseData[phaseName].push({
                 x: dateStr,
                 y: item.day_of_year,
-                station: item.station_name || ''
             });
         });
 
@@ -902,7 +901,6 @@ function createPhenoChart(data, startYear = null, endYear = null) {
                                 const d = new Date(pt.x);
                                 const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
                                 let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
-                                if (pt.station) label += ' @ ' + pt.station;
                                 return label;
                             }
                         }
