@@ -1044,6 +1044,20 @@ function populateShiftPhaseSelectors(data) {
     basicPhases.forEach(p => basicSelect.append(`<option value="${p}">${p}</option>`));
 }
 
+function collectRawPoints(observations, phaseName) {
+    // Collect all individual observation points for a phase
+    const points = [];
+    observations.forEach(item => {
+        const name = item.phase_name_en || item.phase_name_de || 'Unknown';
+        if (name !== phaseName) return;
+        const yr = item.reference_year;
+        const doy = item.day_of_year;
+        if (!yr || !doy) return;
+        points.push({ x: yr, y: doy });
+    });
+    return points.sort((a, b) => a.x - b.x);
+}
+
 function aggregateByYear(observations, phaseName) {
     // Group observations by year, compute average day_of_year
     const yearMap = {};
@@ -1094,6 +1108,48 @@ function doyToDateStr(doy) {
     return d.getDate() + ' ' + monthNames[d.getMonth()];
 }
 
+function addPhaseDatasets(datasets, statsArr, observations, phaseName, label, rawColor, avgColor, trendColor, badgeClass) {
+    // 1) Raw individual points (small, semi-transparent)
+    const raw = collectRawPoints(observations, phaseName);
+    if (raw.length === 0) return;
+    datasets.push({
+        label: label + ' (observations)',
+        data: raw,
+        backgroundColor: rawColor.replace('1)', '0.3)'),
+        borderColor: rawColor.replace('1)', '0.15)'),
+        borderWidth: 0,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        showLine: false
+    });
+
+    // 2) Yearly average line (larger points, connected)
+    const avg = aggregateByYear(observations, phaseName);
+    datasets.push({
+        label: label + ' (yearly avg)',
+        data: avg,
+        borderColor: avgColor,
+        backgroundColor: avgColor.replace('1)', '0.7)'),
+        pointRadius: 5, pointHoverRadius: 7,
+        showLine: true, tension: 0.3, borderWidth: 2, fill: false
+    });
+
+    // 3) Trend line
+    const reg = linearRegression(avg);
+    const tl = makeTrendLine(avg, reg, trendColor);
+    if (tl) {
+        tl.label = label + ' trend (' + (reg.slope > 0 ? '+' : '') + reg.slope.toFixed(2) + ' d/yr)';
+        datasets.push(tl);
+    }
+
+    // Stats
+    if (reg && avg.length >= 2) {
+        const totalShift = reg.slope * (avg[avg.length-1].x - avg[0].x);
+        const direction = reg.slope < 0 ? 'earlier' : 'later';
+        statsArr.push(`<span class="badge ${badgeClass} me-2 mb-1" style="font-size:0.85em;">${label}: ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total ${Math.abs(totalShift).toFixed(1)} days ${direction} (${avg[0].x}-${avg[avg.length-1].x}, n=${raw.length})</span>`);
+    }
+}
+
 function renderShiftAnalysis() {
     const mode = $('#shiftAnalysisMode').val();
     const data = currentPhenoData;
@@ -1101,7 +1157,7 @@ function renderShiftAnalysis() {
 
     const ctx = document.getElementById('shiftAnalysisChart').getContext('2d');
     const datasets = [];
-    let statsHtml = '';
+    const statsArr = [];
 
     if (mode === 'compare') {
         const archivePhase = $('#shiftArchivePhase').val();
@@ -1109,60 +1165,22 @@ function renderShiftAnalysis() {
         if (!archivePhase && !basicPhase) { alert('Please select at least one phase.'); return; }
 
         if (archivePhase) {
-            const pts = aggregateByYear(data.pheno_new_individual || [], archivePhase);
-            datasets.push({
-                label: 'Archive: ' + archivePhase,
-                data: pts,
-                borderColor: 'rgba(54, 162, 235, 1)',
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
-            });
-            const reg = linearRegression(pts);
-            const tl = makeTrendLine(pts, reg, 'rgba(54, 162, 235, 0.5)');
-            if (tl) datasets.push(tl);
-            if (reg && pts.length >= 2) {
-                const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
-                statsHtml += `<span class="badge bg-primary me-3">Archive "${archivePhase}": ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${totalShift > 0 ? '+' : ''}${totalShift.toFixed(1)} days (${pts[0].x}-${pts[pts.length-1].x})</span>`;
-            }
+            addPhaseDatasets(datasets, statsArr, data.pheno_new_individual || [], archivePhase,
+                'Archive: ' + archivePhase,
+                'rgba(54, 162, 235, 1)', 'rgba(54, 162, 235, 1)', 'rgba(54, 162, 235, 0.5)', 'bg-primary');
         }
         if (basicPhase) {
-            const pts = aggregateByYear(data.pheno_individual || [], basicPhase);
-            datasets.push({
-                label: 'Basic: ' + basicPhase,
-                data: pts,
-                borderColor: 'rgba(75, 192, 192, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
-            });
-            const reg = linearRegression(pts);
-            const tl = makeTrendLine(pts, reg, 'rgba(75, 192, 192, 0.5)');
-            if (tl) datasets.push(tl);
-            if (reg && pts.length >= 2) {
-                const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
-                statsHtml += `<span class="badge bg-success me-3">Basic "${basicPhase}": ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${totalShift > 0 ? '+' : ''}${totalShift.toFixed(1)} days (${pts[0].x}-${pts[pts.length-1].x})</span>`;
-            }
+            addPhaseDatasets(datasets, statsArr, data.pheno_individual || [], basicPhase,
+                'Basic: ' + basicPhase,
+                'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 0.5)', 'bg-success');
         }
     } else {
-        // Basic phase yearly trend
         const basicPhase = $('#shiftBasicPhase').val();
         if (!basicPhase) { alert('Please select a Basic phase.'); return; }
 
-        const pts = aggregateByYear(data.pheno_individual || [], basicPhase);
-        datasets.push({
-            label: basicPhase,
-            data: pts,
-            borderColor: 'rgba(75, 192, 192, 1)',
-            backgroundColor: 'rgba(75, 192, 192, 0.6)',
-            pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
-        });
-        const reg = linearRegression(pts);
-        const tl = makeTrendLine(pts, reg, 'rgba(75, 192, 192, 0.5)');
-        if (tl) datasets.push(tl);
-        if (reg && pts.length >= 2) {
-            const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
-            const direction = reg.slope < 0 ? 'earlier' : 'later';
-            statsHtml += `<div class="alert alert-info mb-0 py-2"><strong>${basicPhase}</strong>: trend ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${Math.abs(totalShift).toFixed(1)} days ${direction} over ${pts[pts.length-1].x - pts[0].x} years (${pts[0].x}-${pts[pts.length-1].x})</div>`;
-        }
+        addPhaseDatasets(datasets, statsArr, data.pheno_individual || [], basicPhase,
+            basicPhase,
+            'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 0.5)', 'bg-success');
     }
 
     if (datasets.length === 0) return;
@@ -1202,7 +1220,7 @@ function renderShiftAnalysis() {
         }
     });
 
-    $('#shiftAnalysisStats').html(statsHtml);
+    $('#shiftAnalysisStats').html(statsArr.join(''));
 }
 
 function createPhenoNewHistogram(phasesData) {
