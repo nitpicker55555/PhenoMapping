@@ -1162,17 +1162,91 @@ function renderShiftAnalysis() {
     if (mode === 'compare') {
         const archivePhase = $('#shiftArchivePhase').val();
         const basicPhase = $('#shiftBasicPhase').val();
-        if (!archivePhase && !basicPhase) { alert('Please select at least one phase.'); return; }
+        if (!archivePhase || !basicPhase) { alert('Please select both an Archive phase and a Basic phase.'); return; }
 
-        if (archivePhase) {
-            addPhaseDatasets(datasets, statsArr, data.pheno_new_individual || [], archivePhase,
-                'Archive: ' + archivePhase,
-                'rgba(54, 162, 235, 1)', 'rgba(54, 162, 235, 1)', 'rgba(54, 162, 235, 0.5)', 'bg-primary');
+        // Calculate Archive baseline: average day_of_year across all Archive observations for this phase
+        const archiveRaw = collectRawPoints(data.pheno_new_individual || [], archivePhase);
+        if (archiveRaw.length === 0) { alert('No Archive observations found for this phase.'); return; }
+        const baselineYear = archiveRaw[0].x;
+        const baselineDoy = Math.round(archiveRaw.reduce((s, p) => s + p.y, 0) / archiveRaw.length);
+
+        // Archive raw points
+        datasets.push({
+            label: 'Archive ' + baselineYear + ': ' + archivePhase + ' (n=' + archiveRaw.length + ')',
+            data: archiveRaw,
+            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+            borderColor: 'rgba(255, 99, 132, 0.5)',
+            borderWidth: 0,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+        });
+
+        // Baseline horizontal line spanning the full chart range
+        const basicRaw = collectRawPoints(data.pheno_individual || [], basicPhase);
+        const basicAvg = aggregateByYear(data.pheno_individual || [], basicPhase);
+        const allYears = [...archiveRaw.map(p => p.x), ...basicRaw.map(p => p.x)];
+        const xMin = Math.min(...allYears);
+        const xMax = Math.max(...allYears);
+        datasets.push({
+            label: 'Baseline: ' + archivePhase + ' ' + baselineYear + ' (Day ' + baselineDoy + ', ' + doyToDateStr(baselineDoy) + ')',
+            data: [{ x: xMin, y: baselineDoy }, { x: xMax, y: baselineDoy }],
+            borderColor: 'rgba(255, 99, 132, 0.8)',
+            borderWidth: 2,
+            borderDash: [10, 5],
+            pointRadius: 0,
+            showLine: true,
+            fill: false
+        });
+
+        // Basic raw points
+        datasets.push({
+            label: 'Basic: ' + basicPhase + ' (observations)',
+            data: basicRaw,
+            backgroundColor: 'rgba(75, 192, 192, 0.25)',
+            borderColor: 'rgba(75, 192, 192, 0.1)',
+            borderWidth: 0,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            showLine: false
+        });
+
+        // Basic yearly average line
+        datasets.push({
+            label: 'Basic: ' + basicPhase + ' (yearly avg)',
+            data: basicAvg,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.7)',
+            pointRadius: 5, pointHoverRadius: 7,
+            showLine: true, tension: 0.3, borderWidth: 2, fill: false
+        });
+
+        // Basic trend line
+        const reg = linearRegression(basicAvg);
+        const tl = makeTrendLine(basicAvg, reg, 'rgba(75, 192, 192, 0.5)');
+        if (tl) {
+            tl.label = 'Basic trend (' + (reg.slope > 0 ? '+' : '') + reg.slope.toFixed(2) + ' d/yr)';
+            datasets.push(tl);
         }
-        if (basicPhase) {
-            addPhaseDatasets(datasets, statsArr, data.pheno_individual || [], basicPhase,
-                'Basic: ' + basicPhase,
-                'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 1)', 'rgba(75, 192, 192, 0.5)', 'bg-success');
+
+        // Stats: compare Basic average to Archive baseline
+        if (basicAvg.length > 0) {
+            const basicFirstAvg = basicAvg[0].y;
+            const basicLastAvg = basicAvg[basicAvg.length - 1].y;
+            const basicOverallAvg = Math.round(basicRaw.reduce((s, p) => s + p.y, 0) / basicRaw.length);
+            const diffFromBaseline = basicOverallAvg - baselineDoy;
+            const diffDirection = diffFromBaseline < 0 ? 'earlier' : 'later';
+
+            statsArr.push(`<div class="alert alert-info mb-1 py-2">
+                <strong>Baseline (${baselineYear}):</strong> ${archivePhase} avg Day ${baselineDoy} (${doyToDateStr(baselineDoy)}), n=${archiveRaw.length}<br>
+                <strong>Basic (${basicAvg[0].x}-${basicAvg[basicAvg.length-1].x}):</strong> ${basicPhase} overall avg Day ${basicOverallAvg} (${doyToDateStr(basicOverallAvg)}), n=${basicRaw.length}<br>
+                <strong>Shift vs baseline:</strong> ${Math.abs(diffFromBaseline)} days ${diffDirection} on average`);
+            if (reg && basicAvg.length >= 2) {
+                const totalShift = reg.slope * (basicAvg[basicAvg.length-1].x - basicAvg[0].x);
+                const trendDir = reg.slope < 0 ? 'earlier' : 'later';
+                statsArr.push(`<br><strong>Basic trend:</strong> ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, ${Math.abs(totalShift).toFixed(1)} days ${trendDir} over ${basicAvg[basicAvg.length-1].x - basicAvg[0].x} years`);
+            }
+            statsArr.push(`</div>`);
         }
     } else {
         const basicPhase = $('#shiftBasicPhase').val();
@@ -1193,7 +1267,7 @@ function renderShiftAnalysis() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                title: { display: true, text: mode === 'compare' ? 'Phase Comparison: Archive vs Basic' : 'Yearly Phenological Trend' },
+                title: { display: true, text: mode === 'compare' ? 'Phenological Shift: Basic Trend vs Archive Baseline' : 'Yearly Phenological Trend' },
                 legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
                 tooltip: {
                     callbacks: {
