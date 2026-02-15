@@ -315,6 +315,49 @@
                     </div>
                 </div>
                 
+                <!-- Phenological Shift Analysis -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-dark text-white">
+                                <h6 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Phenological Shift Analysis</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Analysis Mode:</label>
+                                        <select class="form-select form-select-sm" id="shiftAnalysisMode">
+                                            <option value="compare">Compare Archive vs Basic</option>
+                                            <option value="basic_trend">Basic Phase Yearly Trend</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="shiftArchivePhaseGroup">
+                                        <label class="form-label fw-bold">Archive Phase:</label>
+                                        <select class="form-select form-select-sm" id="shiftArchivePhase">
+                                            <option value="">-- Select Phase --</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Basic Phase:</label>
+                                        <select class="form-select form-select-sm" id="shiftBasicPhase">
+                                            <option value="">-- Select Phase --</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button class="btn btn-dark btn-sm w-100" onclick="renderShiftAnalysis()">
+                                            <i class="fas fa-chart-line me-1"></i>Analyze
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="min-height: 400px; position: relative;">
+                                    <canvas id="shiftAnalysisChart"></canvas>
+                                </div>
+                                <div id="shiftAnalysisStats" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Phases Histogram Section -->
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -412,6 +455,11 @@ $(document).ready(function() {
             phenoHistogramInstance.destroy();
             phenoHistogramInstance = null;
         }
+        if (shiftChartInstance) {
+            shiftChartInstance.destroy();
+            shiftChartInstance = null;
+        }
+        $('#shiftAnalysisStats').html('');
         currentPhenoData = null;
     });
 });
@@ -664,6 +712,7 @@ function viewSpeciesPhases(speciesName) {
             // Store data and create charts
             currentPhenoData = data;
             createPhenologyCharts(data);
+            populateShiftPhaseSelectors(data);
         })
         .fail(function() {
             $('#phenoNewPhasesContent').html('<p class="text-danger">Failed to load phases</p>');
@@ -959,6 +1008,201 @@ function updatePhenoChart() {
         currentPhenoData.pheno_individual = data.pheno_individual;
         createPhenoChart(currentPhenoData);
     });
+}
+
+// === Phenological Shift Analysis ===
+let shiftChartInstance = null;
+
+// Toggle archive phase selector visibility based on mode
+$('#shiftAnalysisMode').on('change', function() {
+    if ($(this).val() === 'compare') {
+        $('#shiftArchivePhaseGroup').show();
+    } else {
+        $('#shiftArchivePhaseGroup').hide();
+    }
+});
+
+function populateShiftPhaseSelectors(data) {
+    const archiveSelect = $('#shiftArchivePhase');
+    const basicSelect = $('#shiftBasicPhase');
+    archiveSelect.html('<option value="">-- Select Phase --</option>');
+    basicSelect.html('<option value="">-- Select Phase --</option>');
+
+    // Collect unique phases from individual observations
+    const archivePhases = new Set();
+    (data.pheno_new_individual || []).forEach(item => {
+        const name = item.phase_name_en || item.phase_name_de || 'Unknown';
+        archivePhases.add(name);
+    });
+    const basicPhases = new Set();
+    (data.pheno_individual || []).forEach(item => {
+        const name = item.phase_name_en || item.phase_name_de || 'Unknown';
+        basicPhases.add(name);
+    });
+
+    archivePhases.forEach(p => archiveSelect.append(`<option value="${p}">${p}</option>`));
+    basicPhases.forEach(p => basicSelect.append(`<option value="${p}">${p}</option>`));
+}
+
+function aggregateByYear(observations, phaseName) {
+    // Group observations by year, compute average day_of_year
+    const yearMap = {};
+    observations.forEach(item => {
+        const name = item.phase_name_en || item.phase_name_de || 'Unknown';
+        if (name !== phaseName) return;
+        const yr = item.reference_year;
+        const doy = item.day_of_year;
+        if (!yr || !doy) return;
+        if (!yearMap[yr]) yearMap[yr] = { sum: 0, count: 0 };
+        yearMap[yr].sum += doy;
+        yearMap[yr].count += 1;
+    });
+    return Object.entries(yearMap)
+        .map(([yr, v]) => ({ x: parseInt(yr), y: Math.round(v.sum / v.count) }))
+        .sort((a, b) => a.x - b.x);
+}
+
+function linearRegression(points) {
+    const n = points.length;
+    if (n < 2) return null;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    points.forEach(p => { sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x; });
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    return { slope, intercept };
+}
+
+function makeTrendLine(points, reg, color) {
+    if (!reg || points.length < 2) return null;
+    const xMin = points[0].x;
+    const xMax = points[points.length - 1].x;
+    return {
+        label: 'Trend (' + (reg.slope > 0 ? '+' : '') + reg.slope.toFixed(2) + ' days/year)',
+        data: [{ x: xMin, y: reg.intercept + reg.slope * xMin }, { x: xMax, y: reg.intercept + reg.slope * xMax }],
+        borderColor: color,
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        showLine: true,
+        fill: false
+    };
+}
+
+function doyToDateStr(doy) {
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const d = new Date(2000, 0, doy);
+    return d.getDate() + ' ' + monthNames[d.getMonth()];
+}
+
+function renderShiftAnalysis() {
+    const mode = $('#shiftAnalysisMode').val();
+    const data = currentPhenoData;
+    if (!data) return;
+
+    const ctx = document.getElementById('shiftAnalysisChart').getContext('2d');
+    const datasets = [];
+    let statsHtml = '';
+
+    if (mode === 'compare') {
+        const archivePhase = $('#shiftArchivePhase').val();
+        const basicPhase = $('#shiftBasicPhase').val();
+        if (!archivePhase && !basicPhase) { alert('Please select at least one phase.'); return; }
+
+        if (archivePhase) {
+            const pts = aggregateByYear(data.pheno_new_individual || [], archivePhase);
+            datasets.push({
+                label: 'Archive: ' + archivePhase,
+                data: pts,
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
+            });
+            const reg = linearRegression(pts);
+            const tl = makeTrendLine(pts, reg, 'rgba(54, 162, 235, 0.5)');
+            if (tl) datasets.push(tl);
+            if (reg && pts.length >= 2) {
+                const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
+                statsHtml += `<span class="badge bg-primary me-3">Archive "${archivePhase}": ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${totalShift > 0 ? '+' : ''}${totalShift.toFixed(1)} days (${pts[0].x}-${pts[pts.length-1].x})</span>`;
+            }
+        }
+        if (basicPhase) {
+            const pts = aggregateByYear(data.pheno_individual || [], basicPhase);
+            datasets.push({
+                label: 'Basic: ' + basicPhase,
+                data: pts,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
+            });
+            const reg = linearRegression(pts);
+            const tl = makeTrendLine(pts, reg, 'rgba(75, 192, 192, 0.5)');
+            if (tl) datasets.push(tl);
+            if (reg && pts.length >= 2) {
+                const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
+                statsHtml += `<span class="badge bg-success me-3">Basic "${basicPhase}": ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${totalShift > 0 ? '+' : ''}${totalShift.toFixed(1)} days (${pts[0].x}-${pts[pts.length-1].x})</span>`;
+            }
+        }
+    } else {
+        // Basic phase yearly trend
+        const basicPhase = $('#shiftBasicPhase').val();
+        if (!basicPhase) { alert('Please select a Basic phase.'); return; }
+
+        const pts = aggregateByYear(data.pheno_individual || [], basicPhase);
+        datasets.push({
+            label: basicPhase,
+            data: pts,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+            pointRadius: 5, pointHoverRadius: 7, showLine: true, tension: 0.3, borderWidth: 2, fill: false
+        });
+        const reg = linearRegression(pts);
+        const tl = makeTrendLine(pts, reg, 'rgba(75, 192, 192, 0.5)');
+        if (tl) datasets.push(tl);
+        if (reg && pts.length >= 2) {
+            const totalShift = reg.slope * (pts[pts.length-1].x - pts[0].x);
+            const direction = reg.slope < 0 ? 'earlier' : 'later';
+            statsHtml += `<div class="alert alert-info mb-0 py-2"><strong>${basicPhase}</strong>: trend ${reg.slope > 0 ? '+' : ''}${reg.slope.toFixed(2)} days/year, total shift ${Math.abs(totalShift).toFixed(1)} days ${direction} over ${pts[pts.length-1].x - pts[0].x} years (${pts[0].x}-${pts[pts.length-1].x})</div>`;
+        }
+    }
+
+    if (datasets.length === 0) return;
+
+    if (shiftChartInstance) shiftChartInstance.destroy();
+    shiftChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: mode === 'compare' ? 'Phase Comparison: Archive vs Basic' : 'Yearly Phenological Trend' },
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const pt = context.raw;
+                            return context.dataset.label + ': Year ' + pt.x + ', Day ' + pt.y + ' (' + doyToDateStr(pt.y) + ')';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Year' },
+                    ticks: { callback: v => Math.round(v).toString() }
+                },
+                y: {
+                    title: { display: true, text: 'Day of Year' },
+                    ticks: {
+                        callback: function(v) { return v + ' (' + doyToDateStr(v) + ')'; }
+                    }
+                }
+            }
+        }
+    });
+
+    $('#shiftAnalysisStats').html(statsHtml);
 }
 
 function createPhenoNewHistogram(phasesData) {
