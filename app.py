@@ -1045,20 +1045,6 @@ def api_pheno_new_species_phases(species_name):
             SELECT DISTINCT id FROM dwd_species
             WHERE species_name_en = %s OR species_name_la = %s OR species_name_de = %s
         """
-        # Determine effective year range for pheno_new
-        if req_year_start is not None and req_year_end is not None:
-            new_eff_start, new_eff_end = req_year_start, req_year_end
-        else:
-            cursor_new.execute(f"""
-                SELECT MIN(CAST(o.reference_year AS INTEGER)), MAX(CAST(o.reference_year AS INTEGER))
-                FROM dwd_observation o
-                WHERE o.species_id IN ({species_filter_sql}) AND o.date IS NOT NULL
-            """, (species_name, species_name, species_name))
-            yr = cursor_new.fetchone()
-            new_eff_start = yr[0] if yr and yr[0] else 0
-            new_eff_end = yr[1] if yr and yr[1] else 0
-        new_year_span = (new_eff_end - new_eff_start + 1) if new_eff_start else 0
-
         # Build year filter clause for pheno_new
         new_year_filter = ""
         new_year_params = (species_name, species_name, species_name)
@@ -1066,42 +1052,22 @@ def api_pheno_new_species_phases(species_name):
             new_year_filter = " AND CAST(o.reference_year AS INTEGER) BETWEEN %s AND %s"
             new_year_params = (species_name, species_name, species_name, req_year_start, req_year_end)
 
-        if new_year_span <= 10:
-            # 10年以内：返回按天去重的观测点
-            cursor_new.execute(f"""
-                SELECT
-                    p.phase_name_en,
-                    p.phase_name_de,
-                    TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
-                    CAST(o.day_of_year AS INTEGER) as day_of_year,
-                    CAST(o.reference_year AS INTEGER) as reference_year
-                FROM dwd_observation o
-                JOIN dwd_phase p ON o.phase_id = p.id
-                WHERE o.species_id IN ({species_filter_sql})
-                    AND o.date IS NOT NULL{new_year_filter}
-                GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
-                ORDER BY p.phase_name_en, obs_date
-            """, new_year_params)
-            new_time_series = []
-            new_individual_observations = dict_fetchall(cursor_new)
-        else:
-            # 10年以上：按年份聚合
-            cursor_new.execute(f"""
-                SELECT
-                    p.phase_name_en,
-                    p.phase_name_de,
-                    CAST(o.reference_year AS INTEGER) as year,
-                    AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
-                    COUNT(o.id) as observation_count
-                FROM dwd_observation o
-                JOIN dwd_phase p ON o.phase_id = p.id
-                WHERE o.species_id IN ({species_filter_sql})
-                    AND o.date IS NOT NULL{new_year_filter}
-                GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year
-                ORDER BY p.phase_name_en, year
-            """, new_year_params)
-            new_time_series = dict_fetchall(cursor_new)
-            new_individual_observations = []
+        # Always return individual observations (deduplicated by date)
+        cursor_new.execute(f"""
+            SELECT
+                p.phase_name_en,
+                p.phase_name_de,
+                TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
+                CAST(o.day_of_year AS INTEGER) as day_of_year,
+                CAST(o.reference_year AS INTEGER) as reference_year
+            FROM dwd_observation o
+            JOIN dwd_phase p ON o.phase_id = p.id
+            WHERE o.species_id IN ({species_filter_sql})
+                AND o.date IS NOT NULL{new_year_filter}
+            GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
+            ORDER BY p.phase_name_en, obs_date
+        """, new_year_params)
+        new_individual_observations = dict_fetchall(cursor_new)
         
         # 查找该物种在pheno数据库中的对应ID（可能有多个匹配）
         cursor.execute("""
@@ -1113,7 +1079,6 @@ def api_pheno_new_species_phases(species_name):
         pheno_species_matches = dict_fetchall(cursor)
         
         pheno_phases = []
-        pheno_time_series = []
         pheno_individual_observations = []
         if pheno_species_matches:
             # 获取pheno数据库中的物候期数据
@@ -1135,20 +1100,6 @@ def api_pheno_new_species_phases(species_name):
 
             pheno_phases = dict_fetchall(cursor)
 
-            # Determine effective year range for pheno
-            if req_year_start is not None and req_year_end is not None:
-                pheno_eff_start, pheno_eff_end = req_year_start, req_year_end
-            else:
-                cursor.execute(f"""
-                    SELECT MIN(CAST(o.reference_year AS INTEGER)), MAX(CAST(o.reference_year AS INTEGER))
-                    FROM dwd_observation o
-                    WHERE o.species_id IN ({placeholders}) AND o.day_of_year IS NOT NULL
-                """, species_ids)
-                pr = cursor.fetchone()
-                pheno_eff_start = pr[0] if pr and pr[0] else 0
-                pheno_eff_end = pr[1] if pr and pr[1] else 0
-            pheno_year_span = (pheno_eff_end - pheno_eff_start + 1) if pheno_eff_start else 0
-
             # Build year filter for pheno
             pheno_year_filter = ""
             pheno_params = species_ids
@@ -1156,40 +1107,22 @@ def api_pheno_new_species_phases(species_name):
                 pheno_year_filter = " AND CAST(o.reference_year AS INTEGER) BETWEEN %s AND %s"
                 pheno_params = species_ids + [req_year_start, req_year_end]
 
-            if pheno_year_span <= 10:
-                # 10年以内：返回按天去重的观测点
-                cursor.execute(f"""
-                    SELECT
-                        p.phase_name_en,
-                        p.phase_name_de,
-                        TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
-                        CAST(o.day_of_year AS INTEGER) as day_of_year,
-                        CAST(o.reference_year AS INTEGER) as reference_year
-                    FROM dwd_observation o
-                    JOIN dwd_phase p ON o.phase_id = p.id
-                    WHERE o.species_id IN ({placeholders})
-                        AND o.date IS NOT NULL{pheno_year_filter}
-                    GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
-                    ORDER BY p.phase_name_en, obs_date
-                """, pheno_params)
-                pheno_individual_observations = dict_fetchall(cursor)
-            else:
-                # 10年以上：按年份聚合
-                cursor.execute(f"""
-                    SELECT
-                        p.phase_name_en,
-                        p.phase_name_de,
-                        o.reference_year as year,
-                        AVG(CAST(o.day_of_year AS INTEGER)) as avg_day_of_year,
-                        COUNT(o.id) as observation_count
-                    FROM dwd_observation o
-                    JOIN dwd_phase p ON o.phase_id = p.id
-                    WHERE o.species_id IN ({placeholders})
-                        AND o.day_of_year IS NOT NULL{pheno_year_filter}
-                    GROUP BY p.phase_name_en, p.phase_name_de, o.reference_year
-                    ORDER BY p.phase_name_en, o.reference_year
-                """, pheno_params)
-                pheno_time_series = dict_fetchall(cursor)
+            # Always return individual observations (deduplicated by date)
+            cursor.execute(f"""
+                SELECT
+                    p.phase_name_en,
+                    p.phase_name_de,
+                    TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
+                    CAST(o.day_of_year AS INTEGER) as day_of_year,
+                    CAST(o.reference_year AS INTEGER) as reference_year
+                FROM dwd_observation o
+                JOIN dwd_phase p ON o.phase_id = p.id
+                WHERE o.species_id IN ({placeholders})
+                    AND o.date IS NOT NULL{pheno_year_filter}
+                GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
+                ORDER BY p.phase_name_en, obs_date
+            """, pheno_params)
+            pheno_individual_observations = dict_fetchall(cursor)
 
         cursor_new.close()
         cursor.close()
@@ -1198,10 +1131,8 @@ def api_pheno_new_species_phases(species_name):
 
         return jsonify({
             'pheno_new_phases': new_phases,
-            'pheno_new_time_series': new_time_series,
             'pheno_new_individual': new_individual_observations,
             'pheno_phases': pheno_phases,
-            'pheno_time_series': pheno_time_series,
             'pheno_individual': pheno_individual_observations,
             'pheno_species_matches': pheno_species_matches
         })
