@@ -1055,7 +1055,7 @@ def api_pheno_new_species_phases(species_name):
                 SELECT
                     p.phase_name_en,
                     p.phase_name_de,
-                    CAST(o.date AS date) as obs_date,
+                    TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
                     CAST(o.day_of_year AS INTEGER) as day_of_year,
                     CAST(o.reference_year AS INTEGER) as reference_year
                 FROM dwd_observation o
@@ -1133,7 +1133,7 @@ def api_pheno_new_species_phases(species_name):
                     SELECT
                         p.phase_name_en,
                         p.phase_name_de,
-                        CAST(o.date AS date) as obs_date,
+                        TO_CHAR(CAST(o.date AS date), 'YYYY-MM-DD') as obs_date,
                         CAST(o.day_of_year AS INTEGER) as day_of_year,
                         CAST(o.reference_year AS INTEGER) as reference_year
                     FROM dwd_observation o
