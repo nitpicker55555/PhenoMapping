@@ -654,312 +654,346 @@ function viewSpeciesPhases(speciesName) {
 }
 
 function createPhenologyCharts(data) {
-    // Debug: 查看返回的数据
-    console.log('Pheno New Time Series:', data.pheno_new_time_series);
-    console.log('Pheno Time Series:', data.pheno_time_series);
-    
     // Get year ranges for each database separately
     const phenoNewYears = [];
     const phenoYears = [];
-    
-    if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
+
+    // For individual mode, extract years from individual observations
+    if (data.pheno_new_individual && data.pheno_new_individual.length > 0) {
+        data.pheno_new_individual.forEach(item => phenoNewYears.push(item.reference_year));
+    } else if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
         data.pheno_new_time_series.forEach(item => phenoNewYears.push(parseInt(item.year)));
     }
-    if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+
+    if (data.pheno_individual && data.pheno_individual.length > 0) {
+        data.pheno_individual.forEach(item => phenoYears.push(item.reference_year));
+    } else if (data.pheno_time_series && data.pheno_time_series.length > 0) {
         data.pheno_time_series.forEach(item => phenoYears.push(parseInt(item.year)));
     }
-    
-    // Set default values for pheno_new
+
     if (phenoNewYears.length > 0) {
-        const minYear = Math.min(...phenoNewYears);
-        const maxYear = Math.max(...phenoNewYears);
-        $('#phenoNewStartYear').val(minYear);
-        $('#phenoNewEndYear').val(maxYear);
-        console.log('Pheno New Year Range:', minYear, '-', maxYear);
+        $('#phenoNewStartYear').val(Math.min(...phenoNewYears));
+        $('#phenoNewEndYear').val(Math.max(...phenoNewYears));
     }
-    
-    // Set default values for pheno
+
     if (phenoYears.length > 0) {
-        const minYear = Math.min(...phenoYears);
-        const maxYear = Math.max(...phenoYears);
-        $('#phenoStartYear').val(minYear);
-        $('#phenoEndYear').val(maxYear);
+        $('#phenoStartYear').val(Math.min(...phenoYears));
+        $('#phenoEndYear').val(Math.max(...phenoYears));
     }
-    
-    // Create both charts with their own ranges
+
     createPhenoNewChart(data);
     createPhenoChart(data);
 }
 
 function createPhenoNewChart(data, startYear = null, endYear = null) {
     const ctx = document.getElementById('phenoNewChart').getContext('2d');
-    
-    // If no range specified, use data's own range
-    if (!startYear || !endYear) {
-        const years = [];
+    const useIndividual = data.pheno_new_individual && data.pheno_new_individual.length > 0;
+
+    if (useIndividual) {
+        // Individual observation mode: X = actual date, Y = day of year
+        const phaseData = {};
+        data.pheno_new_individual.forEach(item => {
+            const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
+            if (!phaseData[phaseName]) phaseData[phaseName] = [];
+            const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
+            if (!dateStr) return;
+            phaseData[phaseName].push({
+                x: dateStr,
+                y: item.day_of_year,
+                station: item.station_name || ''
+            });
+        });
+
+        const datasets = [];
+        const colors = [
+            'rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)',
+            'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+            'rgba(255, 206, 86, 1)', 'rgba(75, 192, 192, 1)',
+            'rgba(231, 76, 60, 1)', 'rgba(46, 204, 113, 1)'
+        ];
+        let ci = 0;
+        Object.entries(phaseData).forEach(([phaseName, points]) => {
+            points.sort((a, b) => a.x.localeCompare(b.x));
+            datasets.push({
+                label: phaseName,
+                data: points,
+                borderColor: colors[ci % colors.length],
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.4)'),
+                borderWidth: 1,
+                pointRadius: 6,
+                pointHoverRadius: 9,
+                showLine: false
+            });
+            ci++;
+        });
+
+        if (phenoNewChartInstance) phenoNewChartInstance.destroy();
+        phenoNewChartInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    title: { display: true, text: 'Pheno Archive - Individual Observations' },
+                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const pt = context.raw;
+                                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                const d = new Date(pt.x);
+                                const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
+                                let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
+                                if (pt.station) label += ' @ ' + pt.station;
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                        title: { display: true, text: 'Date' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Day of Year' },
+                        min: 0, max: 365
+                    }
+                }
+            }
+        });
+    } else {
+        // Aggregated mode (original behavior)
+        if (!startYear || !endYear) {
+            const years = [];
+            if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
+                data.pheno_new_time_series.forEach(item => years.push(parseInt(item.year)));
+            }
+            if (years.length > 0) {
+                startYear = startYear || Math.min(...years);
+                endYear = endYear || Math.max(...years);
+            }
+        }
+
+        const phaseData = {};
         if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
             data.pheno_new_time_series.forEach(item => {
                 const year = parseFloat(item.year);
-                years.push(Math.floor(year));
-                // If fractional year (monthly data), include the next year
-                if (year % 1 !== 0) {
-                    years.push(Math.ceil(year));
-                }
+                const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
+                if (startYear && Math.floor(year) < startYear) return;
+                if (endYear && Math.floor(year) > endYear) return;
+                if (!phaseData[phaseName]) phaseData[phaseName] = [];
+                phaseData[phaseName].push({ x: year, y: Math.round(item.avg_day_of_year) });
             });
         }
-        if (years.length > 0) {
-            startYear = startYear || Math.min(...years);
-            endYear = endYear || Math.max(...years);
-        }
-    }
-    
-    // Process pheno_new time series data by phase
-    const phaseData = {};
-    if (data.pheno_new_time_series && data.pheno_new_time_series.length > 0) {
-        data.pheno_new_time_series.forEach(item => {
-            const year = parseFloat(item.year);
-            const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
-            
-            // Apply year filter
-            if (startYear && Math.floor(year) < startYear) return;
-            if (endYear && Math.floor(year) > endYear) return;
-            
-            if (!phaseData[phaseName]) {
-                phaseData[phaseName] = [];
-            }
-            
-            phaseData[phaseName].push({
-                x: year,
-                y: Math.round(item.avg_day_of_year)
+
+        const datasets = [];
+        const colors = [
+            'rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)',
+            'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+            'rgba(255, 206, 86, 1)'
+        ];
+        let ci = 0;
+        Object.entries(phaseData).forEach(([phaseName, points]) => {
+            datasets.push({
+                label: phaseName,
+                data: points.sort((a, b) => a.x - b.x),
+                borderColor: colors[ci % colors.length],
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.2)'),
+                borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0.3
             });
+            ci++;
         });
-    }
-    
-    // Create datasets for each phase
-    const datasets = [];
-    const colors = [
-        'rgba(54, 162, 235, 1)',
-        'rgba(255, 99, 132, 1)',
-        'rgba(153, 102, 255, 1)',
-        'rgba(255, 159, 64, 1)',
-        'rgba(255, 206, 86, 1)'
-    ];
-    
-    let colorIndex = 0;
-    Object.entries(phaseData).forEach(([phaseName, points]) => {
-        datasets.push({
-            label: phaseName,
-            data: points.sort((a, b) => a.x - b.x),
-            borderColor: colors[colorIndex % colors.length],
-            backgroundColor: colors[colorIndex % colors.length].replace('1)', '0.2)'),
-            borderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            tension: 0.3
-        });
-        colorIndex++;
-    });
-    
-    // Destroy existing chart if any
-    if (phenoNewChartInstance) {
-        phenoNewChartInstance.destroy();
-    }
-    
-    // Create new chart
-    phenoNewChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Pheno Archive Database - Phenological Trends'
-                },
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        boxWidth: 12,
-                        padding: 8,
-                        font: {
-                            size: 11
-                        }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const x = context.parsed.x;
-                            const year = Math.floor(x);
-                            const monthFraction = x - year;
-                            
-                            if (monthFraction > 0) {
-                                const monthIndex = Math.round(monthFraction * 12);
-                                return context.dataset.label + ': Day ' + context.parsed.y + ' (' + monthNames[monthIndex] + ' ' + year + ')';
+
+        if (phenoNewChartInstance) phenoNewChartInstance.destroy();
+        phenoNewChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    title: { display: true, text: 'Pheno Archive Database - Phenological Trends' },
+                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + context.parsed.x + ')';
                             }
-                            return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + year + ')';
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    type: 'linear',
-                    title: {
-                        display: true,
-                        text: 'Year'
-                    },
-                    min: startYear,
-                    max: endYear,
-                    ticks: {
-                        stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
-                        callback: function(value) {
-                            return Math.round(value).toString();
                         }
                     }
                 },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Day of Year'
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Year' },
+                        min: startYear, max: endYear,
+                        ticks: {
+                            stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
+                            callback: v => Math.round(v).toString()
+                        }
                     },
-                    min: 0,
-                    max: 365
+                    y: { title: { display: true, text: 'Day of Year' }, min: 0, max: 365 }
                 }
             }
-        }
-    });
+        });
+    }
 }
 
 function createPhenoChart(data, startYear = null, endYear = null) {
     const ctx = document.getElementById('phenoChart').getContext('2d');
-    
-    // If no range specified, use data's own range
-    if (!startYear || !endYear) {
-        const years = [];
-        if (data.pheno_time_series && data.pheno_time_series.length > 0) {
-            data.pheno_time_series.forEach(item => years.push(parseInt(item.year)));
-        }
-        if (years.length > 0) {
-            startYear = startYear || Math.min(...years);
-            endYear = endYear || Math.max(...years);
-        }
-    }
-    
-    // Process pheno time series data by phase
-    const phaseData = {};
-    if (data.pheno_time_series && data.pheno_time_series.length > 0) {
-        data.pheno_time_series.forEach(item => {
-            const year = parseInt(item.year);
+    const useIndividual = data.pheno_individual && data.pheno_individual.length > 0;
+
+    if (useIndividual) {
+        // Individual observation mode
+        const phaseData = {};
+        data.pheno_individual.forEach(item => {
             const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
-            
-            // Apply year filter
-            if (startYear && year < startYear) return;
-            if (endYear && year > endYear) return;
-            
-            if (!phaseData[phaseName]) {
-                phaseData[phaseName] = [];
-            }
+            if (!phaseData[phaseName]) phaseData[phaseName] = [];
+            const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
+            if (!dateStr) return;
             phaseData[phaseName].push({
-                x: year,
-                y: Math.round(item.avg_day_of_year)
+                x: dateStr,
+                y: item.day_of_year,
+                station: item.station_name || ''
             });
         });
-    }
-    
-    // Create datasets for each phase
-    const datasets = [];
-    const colors = [
-        'rgba(75, 192, 192, 1)',
-        'rgba(255, 206, 86, 1)',
-        'rgba(255, 159, 64, 1)',
-        'rgba(153, 102, 255, 1)',
-        'rgba(231, 76, 60, 1)'
-    ];
-    
-    let colorIndex = 0;
-    Object.entries(phaseData).forEach(([phaseName, points]) => {
-        datasets.push({
-            label: phaseName,
-            data: points.sort((a, b) => a.x - b.x),
-            borderColor: colors[colorIndex % colors.length],
-            backgroundColor: colors[colorIndex % colors.length].replace('1)', '0.2)'),
-            borderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            tension: 0.3
+
+        const datasets = [];
+        const colors = [
+            'rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)',
+            'rgba(255, 159, 64, 1)', 'rgba(153, 102, 255, 1)',
+            'rgba(231, 76, 60, 1)', 'rgba(54, 162, 235, 1)',
+            'rgba(255, 99, 132, 1)', 'rgba(46, 204, 113, 1)'
+        ];
+        let ci = 0;
+        Object.entries(phaseData).forEach(([phaseName, points]) => {
+            points.sort((a, b) => a.x.localeCompare(b.x));
+            datasets.push({
+                label: phaseName,
+                data: points,
+                borderColor: colors[ci % colors.length],
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.4)'),
+                borderWidth: 1,
+                pointRadius: 6,
+                pointHoverRadius: 9,
+                showLine: false
+            });
+            ci++;
         });
-        colorIndex++;
-    });
-    
-    // Destroy existing chart if any
-    if (phenoChartInstance) {
-        phenoChartInstance.destroy();
-    }
-    
-    // Create new chart
-    phenoChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Pheno Basic Database - Phenological Trends'
-                },
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        boxWidth: 12,
-                        padding: 8,
-                        font: {
-                            size: 11
+
+        if (phenoChartInstance) phenoChartInstance.destroy();
+        phenoChartInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    title: { display: true, text: 'Pheno Basic - Individual Observations' },
+                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const pt = context.raw;
+                                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                const d = new Date(pt.x);
+                                const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
+                                let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
+                                if (pt.station) label += ' @ ' + pt.station;
+                                return label;
+                            }
                         }
                     }
                 },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + context.parsed.x + ')';
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    type: 'linear',
-                    title: {
-                        display: true,
-                        text: 'Year'
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                        title: { display: true, text: 'Date' }
                     },
-                    min: startYear,
-                    max: endYear,
-                    ticks: {
-                        stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
-                        callback: function(value) {
-                            return Math.round(value).toString();
-                        }
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Day of Year'
-                    },
-                    min: 0,
-                    max: 365
+                    y: { title: { display: true, text: 'Day of Year' }, min: 0, max: 365 }
                 }
             }
+        });
+    } else {
+        // Aggregated mode
+        if (!startYear || !endYear) {
+            const years = [];
+            if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+                data.pheno_time_series.forEach(item => years.push(parseInt(item.year)));
+            }
+            if (years.length > 0) {
+                startYear = startYear || Math.min(...years);
+                endYear = endYear || Math.max(...years);
+            }
         }
-    });
+
+        const phaseData = {};
+        if (data.pheno_time_series && data.pheno_time_series.length > 0) {
+            data.pheno_time_series.forEach(item => {
+                const year = parseInt(item.year);
+                const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
+                if (startYear && year < startYear) return;
+                if (endYear && year > endYear) return;
+                if (!phaseData[phaseName]) phaseData[phaseName] = [];
+                phaseData[phaseName].push({ x: year, y: Math.round(item.avg_day_of_year) });
+            });
+        }
+
+        const datasets = [];
+        const colors = [
+            'rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)',
+            'rgba(255, 159, 64, 1)', 'rgba(153, 102, 255, 1)',
+            'rgba(231, 76, 60, 1)'
+        ];
+        let ci = 0;
+        Object.entries(phaseData).forEach(([phaseName, points]) => {
+            datasets.push({
+                label: phaseName,
+                data: points.sort((a, b) => a.x - b.x),
+                borderColor: colors[ci % colors.length],
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.2)'),
+                borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0.3
+            });
+            ci++;
+        });
+
+        if (phenoChartInstance) phenoChartInstance.destroy();
+        phenoChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    title: { display: true, text: 'Pheno Basic Database - Phenological Trends' },
+                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': Day ' + context.parsed.y + ' (Year ' + context.parsed.x + ')';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Year' },
+                        min: startYear, max: endYear,
+                        ticks: {
+                            stepSize: Math.max(1, Math.floor((endYear - startYear) / 10)),
+                            callback: v => Math.round(v).toString()
+                        }
+                    },
+                    y: { title: { display: true, text: 'Day of Year' }, min: 0, max: 365 }
+                }
+            }
+        });
+    }
 }
 
 function updatePhenoNewChart() {
