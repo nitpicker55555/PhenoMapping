@@ -271,7 +271,7 @@
                                 <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoNewChart"></canvas>
                                 </div>
-                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot with daily granularity (deduplicated by date) is displayed.</small>
+                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot showing individual observation dates per phase (deduplicated by date) is displayed.</small>
                             </div>
                         </div>
                     </div>
@@ -300,7 +300,7 @@
                                 <div class="flex-grow-1" style="min-height: 350px; position: relative;">
                                     <canvas id="phenoChart"></canvas>
                                 </div>
-                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot with daily granularity (deduplicated by date) is displayed.</small>
+                                <small class="text-muted mt-1">When the time span is within 10 years, a scatter plot showing individual observation dates per phase (deduplicated by date) is displayed.</small>
                             </div>
                         </div>
                     </div>
@@ -692,40 +692,44 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
     const useIndividual = data.pheno_new_individual && data.pheno_new_individual.length > 0;
 
     if (useIndividual) {
-        // Individual observation mode: X = actual date, Y = day of year
-        const phaseData = {};
+        // Individual observation mode: X = date, Y = phase (categorical)
+        const phaseNames = [];
+        const phaseSet = new Set();
         data.pheno_new_individual.forEach(item => {
             const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
-            if (!phaseData[phaseName]) phaseData[phaseName] = [];
-            const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
-            if (!dateStr) return;
-            phaseData[phaseName].push({
-                x: dateStr,
-                y: item.day_of_year,
-            });
+            if (!phaseSet.has(phaseName)) {
+                phaseSet.add(phaseName);
+                phaseNames.push(phaseName);
+            }
         });
 
-        const datasets = [];
+        // Build one dataset per phase for color coding
         const colors = [
             'rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)',
             'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
             'rgba(255, 206, 86, 1)', 'rgba(75, 192, 192, 1)',
             'rgba(231, 76, 60, 1)', 'rgba(46, 204, 113, 1)'
         ];
-        let ci = 0;
-        Object.entries(phaseData).forEach(([phaseName, points]) => {
-            points.sort((a, b) => a.x.localeCompare(b.x));
+        const datasets = [];
+        phaseNames.forEach((phaseName, ci) => {
+            const points = [];
+            data.pheno_new_individual.forEach(item => {
+                const pn = item.phase_name_en || item.phase_name_de || 'Unknown';
+                if (pn !== phaseName) return;
+                const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
+                if (!dateStr) return;
+                points.push({ x: dateStr, y: ci });
+            });
             datasets.push({
                 label: phaseName,
                 data: points,
                 borderColor: colors[ci % colors.length],
-                backgroundColor: colors[ci % colors.length].replace('1)', '0.4)'),
-                borderWidth: 1,
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.6)'),
+                borderWidth: 0,
+                pointRadius: 7,
+                pointHoverRadius: 10,
                 showLine: false
             });
-            ci++;
         });
 
         if (phenoNewChartInstance) phenoNewChartInstance.destroy();
@@ -745,8 +749,7 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
                                 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                                 const d = new Date(pt.x);
                                 const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
-                                let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
-                                return label;
+                                return context.dataset.label + ': ' + dateLabel;
                             }
                         }
                     }
@@ -758,8 +761,15 @@ function createPhenoNewChart(data, startYear = null, endYear = null) {
                         title: { display: true, text: 'Date' }
                     },
                     y: {
-                        title: { display: true, text: 'Day of Year' },
-                        min: 0, max: 365
+                        title: { display: true, text: 'Phase' },
+                        ticks: {
+                            callback: function(value) {
+                                return phaseNames[value] || '';
+                            },
+                            stepSize: 1
+                        },
+                        min: -0.5,
+                        max: phaseNames.length - 0.5
                     }
                 }
             }
@@ -847,40 +857,43 @@ function createPhenoChart(data, startYear = null, endYear = null) {
     const useIndividual = data.pheno_individual && data.pheno_individual.length > 0;
 
     if (useIndividual) {
-        // Individual observation mode
-        const phaseData = {};
+        // Individual observation mode: X = date, Y = phase (categorical)
+        const phaseNames = [];
+        const phaseSet = new Set();
         data.pheno_individual.forEach(item => {
             const phaseName = item.phase_name_en || item.phase_name_de || 'Unknown';
-            if (!phaseData[phaseName]) phaseData[phaseName] = [];
-            const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
-            if (!dateStr) return;
-            phaseData[phaseName].push({
-                x: dateStr,
-                y: item.day_of_year,
-            });
+            if (!phaseSet.has(phaseName)) {
+                phaseSet.add(phaseName);
+                phaseNames.push(phaseName);
+            }
         });
 
-        const datasets = [];
         const colors = [
             'rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)',
             'rgba(255, 159, 64, 1)', 'rgba(153, 102, 255, 1)',
             'rgba(231, 76, 60, 1)', 'rgba(54, 162, 235, 1)',
             'rgba(255, 99, 132, 1)', 'rgba(46, 204, 113, 1)'
         ];
-        let ci = 0;
-        Object.entries(phaseData).forEach(([phaseName, points]) => {
-            points.sort((a, b) => a.x.localeCompare(b.x));
+        const datasets = [];
+        phaseNames.forEach((phaseName, ci) => {
+            const points = [];
+            data.pheno_individual.forEach(item => {
+                const pn = item.phase_name_en || item.phase_name_de || 'Unknown';
+                if (pn !== phaseName) return;
+                const dateStr = item.obs_date ? item.obs_date.split(' ')[0] : null;
+                if (!dateStr) return;
+                points.push({ x: dateStr, y: ci });
+            });
             datasets.push({
                 label: phaseName,
                 data: points,
                 borderColor: colors[ci % colors.length],
-                backgroundColor: colors[ci % colors.length].replace('1)', '0.4)'),
-                borderWidth: 1,
-                pointRadius: 6,
-                pointHoverRadius: 9,
+                backgroundColor: colors[ci % colors.length].replace('1)', '0.6)'),
+                borderWidth: 0,
+                pointRadius: 7,
+                pointHoverRadius: 10,
                 showLine: false
             });
-            ci++;
         });
 
         if (phenoChartInstance) phenoChartInstance.destroy();
@@ -900,8 +913,7 @@ function createPhenoChart(data, startYear = null, endYear = null) {
                                 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                                 const d = new Date(pt.x);
                                 const dateLabel = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
-                                let label = context.dataset.label + ': ' + dateLabel + ' (Day ' + pt.y + ')';
-                                return label;
+                                return context.dataset.label + ': ' + dateLabel;
                             }
                         }
                     }
@@ -912,7 +924,17 @@ function createPhenoChart(data, startYear = null, endYear = null) {
                         time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
                         title: { display: true, text: 'Date' }
                     },
-                    y: { title: { display: true, text: 'Day of Year' }, min: 0, max: 365 }
+                    y: {
+                        title: { display: true, text: 'Phase' },
+                        ticks: {
+                            callback: function(value) {
+                                return phaseNames[value] || '';
+                            },
+                            stepSize: 1
+                        },
+                        min: -0.5,
+                        max: phaseNames.length - 0.5
+                    }
                 }
             }
         });
