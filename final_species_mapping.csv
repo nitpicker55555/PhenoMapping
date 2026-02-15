@@ -84,14 +84,63 @@ Prunus avium(Vogelkirsche),332,"Süßkirsche, späte Reife",Prunus avium,Exact L
 Prunus spinosa(Schlehdorn),125,Schlehe,Prunus spinosa,Exact Latin match: 'Prunus spinosa'
 Erisa vulg:(Heidekräuter),114,Heidekraut,Calluna vulgaris,Exact German match: 'Heidekraut'
 Weidenroggen,203,Winterroggen,Secale cereale,Exact German match: 'Winterroggen'
-Berberis vulgaris (Berberisstrauch),4187,Berberitze,Berberis vulgaris,New species added for DOCX import
-Juniperus communis Wachholder,4188,Wacholder,Juniperus communis,New species added for DOCX import
-Liriodendron tulipifera Tulpenbaum,4189,Tulpenbaum,Liriodendron tulipifera,New species added for DOCX import
-Platanus acidentalis,4190,Platane,Platanus occidentalis,New species added for DOCX import
-Spartium scoparium,4191,Besenginster,Cytisus scoparius,New species added for DOCX import
-Viburnus opulus,4192,Gewöhnlicher Schneeball,Viburnum opulus,New species added for DOCX import
-"Do. Pavia Linn",4193,Rote Rosskastanie,Aesculus pavia,New species added for DOCX import
-"Do. (Schwarzpappel)",4194,Schwarzpappel,Populus nigra,New species added for DOCX import
-Ulmus campustris,4145,Feldulme,"Ulmus campestris,",Matched existing species (typo correction)
-Schwarzbeere Vaccinium Myrtillus,4154,"Idea, Preußelbeere",Vaccinium vitis,Matched existing species
-Winter-waizen,202,Winterweizen,Triticum aestivum,Matched existing species (spelling variant)
+Berberis vulgaris (Berberisstrauch),4187,Berberitze,Berberis vulgaris,New species
+Juniperus communis Wachholder,4188,Wacholder,Juniperus communis,New species
+Liriodendron tulipifera Tulpenbaum,4189,Tulpenbaum,Liriodendron tulipifera,New species
+Platanus acidentalis,4190,Platane,Platanus occidentalis,New species
+Spartium scoparium,4191,Besenginster,Cytisus scoparius,New species
+Viburnus opulus,4192,Gewöhnlicher Schneeball,Viburnum opulus,New species
+"Do. Pavia Linn",4193,Rote Rosskastanie,Aesculus pavia,New species
+"Do. (Schwarzpappel)",4194,Schwarzpappel,Populus nigra,New species
+Ulmus campustris,4145,Feldulme,"Ulmus campestris,",Existing in Pheno Basic
+Schwarzbeere Vaccinium Myrtillus,4154,"Idea, Preußelbeere",Vaccinium vitis,Existing in Pheno Basic
+Winter-waizen,202,Winterweizen,Triticum aestivum,Existing in Pheno Basic
+Busch-Windröschen,102,Busch-Windröschen,Anemone nemorosa,Existing in Pheno Basic
+Esche,104,Esche,Fraxinus excelsior,Existing in Pheno Basic
+Flieder,108,Flieder,Syringa vulgaris,Existing in Pheno Basic
+Sommer-Linde,130,Sommer-Linde,Tilia platyphyllos,Existing in Pheno Basic
+Wiesen-Knäuelgras,136,Wiesen-Knäuelgras,Dactylis glomerata,Existing in Pheno Basic
+Winter-Linde,137,Winter-Linde,Tilia cordata,Existing in Pheno Basic
+Erle (alle Arten),139,Erle (alle Arten),Alnus,Existing in Pheno Basic
+Wintergerste,204,Wintergerste,Hordeum vulgare,Existing in Pheno Basic
+Sommerweizen,206,Sommerweizen,Triticum aestivum,Existing in Pheno Basic
+Apfel,310,Apfel,Malus domestica,Existing in Pheno Basic
+Birne,320,Birne,Pyrus communis,Existing in Pheno Basic
+Süßkirsche,330,Süßkirsche,Prunus avium,Existing in Pheno Basic
+Stachelbeere,350,Stachelbeere,Ribes uva-crispa,Existing in Pheno Basic
+Veilchen,4133,Veilchen,Viola odorata,New species
+Roßkastanie,4134,Roßkastanie,Aesculus Hyppocastanum,New species
+Wallnuss,4135,Wallnuss,Juglans regia,New species
+Schwarzpappel,4136,Schwarzpappel,Populus nigra,New species
+Italienische Pappel,4143,Italienische Pappel,Poppulus nigra,New species
+Schwarzbeere,4146,Schwarzbeere,,New species
+Schwarzpappel,4148,Schwarzpappel,,New species
+Preußelbeere,4149,Preußelbeere,,New species
+Preiselbeere,4159,Preiselbeere,Vacinium vitis Id:,New species
+Veilchen,4160,Veilchen,Viola odorata,New species
+Roßkastanie,4161,Roßkastanie,Aesculus Hyppocastanum,New species
+Wallnuss,4162,Wallnuss,Juglans regia,New species
+Schwarzpappel,4163,Schwarzpappel,Populus nigra,New species
+Vaccinium Myrtillus,4164,Vaccinium Myrtillus,Schwarzbeere,New species
+Preußelbeer,4165,Preußelbeer,,New species
+Schwarzbeere,4166,Schwarzbeere,,New species
+Bergahorn,4167,Bergahorn,,New species
+Maiblümchen,4168,Maiblümchen,,New species
+Aesculus Hyppocastanum,4169,Aesculus Hyppocastanum,Roßkastanie,New species
+Italienische Pappel,4170,Italienische Pappel,Poppulus nigra,New species
+Maiblümchen,4171,Maiblümchen,Convallaria majalis,New species
+Feldulme,4172,Feldulme,"Ulmus campestris,",New species
+Schwarzbeere,4173,Schwarzbeere,,New species
+Maiblümchen,4174,Maiblümchen,,New species
+Schwarzpappel,4175,Schwarzpappel,,New species
+Preußelbeere,4176,Preußelbeere,,New species
+Aesculus Hyppocastanum,4177,Aesculus Hyppocastanum,Roßkastanie,New species
+Daphne Mezereum,4178,Daphne Mezereum,Seidlbast,New species
+Vaccinium Myrtillus,4179,Vaccinium Myrtillus,Schwarzbere,New species
+Evonymus Europaeus,4180,Evonymus Europaeus,Pfaffenköggchen,New species
+"Idea, Preußelbeere",4181,"Idea, Preußelbeere",Vaccinium vitis,New species
+Maiblümchen,4182,Maiblümchen,Convallaria majalis,New species
+FöherPinus sylvestris,4183,FöherPinus sylvestris,,New species
+FichtePinus picea,4184,FichtePinus picea,,New species
+Vacinium Myrt.,4185,Vacinium Myrt.,Heidelbeere,New species
+Preiselbeere,4186,Preiselbeere,Vacinium vitis Id:,New species
