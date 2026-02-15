@@ -996,20 +996,44 @@ function createPhenoChart(data, startYear = null, endYear = null) {
 
 function updatePhenoNewChart() {
     if (!currentPhenoData) return;
-    
     const startYear = parseInt($('#phenoNewStartYear').val()) || null;
     const endYear = parseInt($('#phenoNewEndYear').val()) || null;
-    
-    createPhenoNewChart(currentPhenoData, startYear, endYear);
+    const span = (startYear && endYear) ? (endYear - startYear + 1) : 999;
+
+    if (span <= 10) {
+        // Re-fetch with year range to get individual observations
+        const speciesName = $('#speciesNameTitle').text();
+        $.get('/api/pheno-new/species-phases/' + encodeURIComponent(speciesName) + '?year_start=' + startYear + '&year_end=' + endYear)
+            .done(function(data) {
+                currentPhenoData.pheno_new_individual = data.pheno_new_individual;
+                currentPhenoData.pheno_new_time_series = data.pheno_new_time_series;
+                createPhenoNewChart(currentPhenoData, startYear, endYear);
+            });
+    } else {
+        currentPhenoData.pheno_new_individual = [];
+        createPhenoNewChart(currentPhenoData, startYear, endYear);
+    }
 }
 
 function updatePhenoChart() {
     if (!currentPhenoData) return;
-
     const startYear = parseInt($('#phenoStartYear').val()) || null;
     const endYear = parseInt($('#phenoEndYear').val()) || null;
+    const span = (startYear && endYear) ? (endYear - startYear + 1) : 999;
 
-    createPhenoChart(currentPhenoData, startYear, endYear);
+    if (span <= 10) {
+        // Re-fetch with year range to get individual observations
+        const speciesName = $('#speciesNameTitle').text();
+        $.get('/api/pheno-new/species-phases/' + encodeURIComponent(speciesName) + '?year_start=' + startYear + '&year_end=' + endYear)
+            .done(function(data) {
+                currentPhenoData.pheno_individual = data.pheno_individual;
+                currentPhenoData.pheno_time_series = data.pheno_time_series;
+                createPhenoChart(currentPhenoData, startYear, endYear);
+            });
+    } else {
+        currentPhenoData.pheno_individual = [];
+        createPhenoChart(currentPhenoData, startYear, endYear);
+    }
 }
 
 function createPhenoNewHistogram(phasesData) {
