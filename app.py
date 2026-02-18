@@ -1018,23 +1018,24 @@ def api_pheno_new_species_phases(species_name):
         # 获取pheno_new中该物种的物候期数据
         # 使用子查询避免species表重复记录导致的重复计数
         cursor_new.execute("""
-            SELECT DISTINCT
-                p.id as phase_id,
-                p.phase_name_en,
-                p.phase_name_de,
-                COUNT(o.id) as observation_count,
+            SELECT
+                o.phase_id as phase_id,
+                MIN(p.phase_name_en) as phase_name_en,
+                MIN(p.phase_name_de) as phase_name_de,
+                COUNT(DISTINCT o.id) as observation_count,
                 MIN(o.date) as start_date,
                 MAX(o.date) as end_date
             FROM dwd_observation o
-            JOIN dwd_phase p ON o.phase_id = p.id
+            JOIN (SELECT DISTINCT id, phase_name_en, phase_name_de FROM dwd_phase) p
+                ON o.phase_id = p.id
             WHERE o.species_id IN (
                 SELECT DISTINCT id FROM dwd_species
                 WHERE species_name_en = %s
                    OR species_name_la = %s
                    OR species_name_de = %s
             )
-            GROUP BY p.id, p.phase_name_en, p.phase_name_de
-            ORDER BY p.phase_name_en
+            GROUP BY o.phase_id
+            ORDER BY phase_name_en
         """, (species_name, species_name, species_name))
         
         new_phases = dict_fetchall(cursor_new)
@@ -1061,7 +1062,7 @@ def api_pheno_new_species_phases(species_name):
                 CAST(o.day_of_year AS INTEGER) as day_of_year,
                 CAST(o.reference_year AS INTEGER) as reference_year
             FROM dwd_observation o
-            JOIN dwd_phase p ON o.phase_id = p.id
+            JOIN (SELECT DISTINCT id, phase_name_en, phase_name_de FROM dwd_phase) p ON o.phase_id = p.id
             WHERE o.species_id IN ({species_filter_sql})
                 AND o.date IS NOT NULL{new_year_filter}
             GROUP BY p.phase_name_en, p.phase_name_de, CAST(o.date AS date), o.day_of_year, o.reference_year
@@ -1259,7 +1260,7 @@ def api_data_distribution():
                 city_name = item['station_name']
                 # Normalize city name to NFC form for consistent matching
                 city_name_normalized = unicodedata.normalize('NFC', city_name)
-                state_name = CITY_STATE_MAPPING.get(city_name_normalized, city_name)  # Use mapping or keep original
+                state_name = 'Bayern'  # All pheno_new archive stations are in Bayern
                 year = item['year']
                 count = item['observation_count']
 
@@ -1446,7 +1447,8 @@ def api_data_distribution_detailed():
                     o.reference_year,
                     COUNT(o.id) as observation_count
                 FROM dwd_observation o
-                JOIN dwd_station s ON o.station_id = s.id
+                JOIN (SELECT DISTINCT ON (id) id, station_name, latitude, longitude, state, area
+                      FROM dwd_station ORDER BY id) s ON o.station_id = s.id
                 WHERE s.station_name IS NOT NULL
                   AND s.latitude IS NOT NULL
                   AND s.longitude IS NOT NULL
