@@ -1,83 +1,83 @@
-# 植物物候观测数据可视化平台
+# Plant Phenology Observation Data Visualization Platform
 
-基于德国气象局(DWD)植物物候观测数据的交互式可视化平台，展示70年来德国境内植物生长周期的变化趋势。
+An interactive visualization platform built on plant phenology observation data from the German Meteorological Service (DWD), showcasing 70 years of changes in plant growth cycles across Germany.
 
-## 功能特性
+## Features
 
-### 🏠 数据概览
-- 实时统计展示：1700万+观测记录，1000+观测站点，97种植物
-- 交互式地图预览德国境内观测站点分布
-- 年度观测量趋势图表
+### 🏠 Data Overview
+- Real-time statistics: 17M+ observation records, 1000+ observation stations, 97 plant species
+- Interactive map previewing the distribution of observation stations across Germany
+- Annual observation volume trend charts
 
-### 🗺️ 地理分布分析
-- 交互式地图显示所有观测站点
-- 支持按州、海拔、观测频率筛选站点
-- 地区统计图表和海拔分布分析
-- 详细站点信息表格
+### 🗺️ Geographic Distribution Analysis
+- Interactive map displaying all observation stations
+- Filter stations by state, elevation, and observation frequency
+- Regional statistics charts and elevation distribution analysis
+- Detailed station information tables
 
-### 📈 时间序列分析
-- 物候期年际变化趋势分析
-- 异常年份检测和气候影响评估
-- 支持自定义物种和物候期组合分析
-- 数据导出功能
+### 📈 Time Series Analysis
+- Interannual trend analysis of phenological phases
+- Anomalous year detection and climate impact assessment
+- Custom species and phenological phase combination analysis
+- Data export functionality
 
-### 🌿 物种研究
-- 97种植物的详细信息展示
-- 物种分组统计和物候特征分析
-- 每个物种的地理分布和观测统计
-- 网格和列表两种浏览模式
+### 🌿 Species Research
+- Detailed information for 97 plant species
+- Species grouping statistics and phenological characteristic analysis
+- Geographic distribution and observation statistics for each species
+- Both grid and list browsing modes
 
-### 🛡️ 数据质量监控
-- 三级质量等级分布统计
-- 年度数据质量趋势分析
-- 质量评分和改进建议
+### 🛡️ Data Quality Monitoring
+- Three-tier quality level distribution statistics
+- Annual data quality trend analysis
+- Quality scoring and improvement suggestions
 
-## 技术架构
+## Technical Architecture
 
-### 后端
-- **Flask**: Web框架
-- **PostgreSQL**: 数据库
-- **psycopg2**: 数据库连接器
+### Backend
+- **Flask**: Web framework
+- **PostgreSQL**: Database
+- **psycopg2**: Database connector
 
-### 前端
-- **Bootstrap 5**: UI框架
-- **Chart.js**: 图表可视化
-- **Leaflet**: 地图可视化
-- **jQuery**: JavaScript库
+### Frontend
+- **Bootstrap 5**: UI framework
+- **Chart.js**: Chart visualization
+- **Leaflet**: Map visualization
+- **jQuery**: JavaScript library
 
-### 数据结构
-数据库包含8个主要表：
-- `dwd_observation`: 核心观测数据表（1700万+记录）
-- `dwd_station`: 观测站点信息
-- `dwd_species`: 植物物种信息
-- `dwd_phase`: 物候期定义
-- `dwd_quality_level`: 数据质量等级
-- `dwd_quality_byte`: 质量字节码
-- `dwd_species_group`: 物种分组
-- `dwd_about`: 数据集元信息
+### Data Structure
+The database contains 8 main tables:
+- `dwd_observation`: Core observation data table (17M+ records)
+- `dwd_station`: Observation station information
+- `dwd_species`: Plant species information
+- `dwd_phase`: Phenological phase definitions
+- `dwd_quality_level`: Data quality levels
+- `dwd_quality_byte`: Quality byte codes
+- `dwd_species_group`: Species groupings
+- `dwd_about`: Dataset metadata
 
-## 安装部署
+## Installation and Deployment
 
-### 环境要求
+### Requirements
 - Python 3.8+
 - PostgreSQL 12+
-- 现代Web浏览器
+- Modern web browser
 
-### 1. 克隆项目
+### 1. Clone the Project
 ```bash
 git clone <repository-url>
 cd PhenoMapping
 ```
 
-### 2. 安装依赖
+### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 数据库配置
-确保PostgreSQL服务正在运行，并且存在名为`pheno`的数据库，包含DWD物候观测数据。
+### 3. Database Configuration
+Ensure the PostgreSQL service is running and that a database named `pheno` exists containing the DWD phenology observation data.
 
-在`app.py`中修改数据库配置：
+Modify the database configuration in `app.py`:
 ```python
 DB_CONFIG = {
     'host': 'localhost',
@@ -88,49 +88,49 @@ DB_CONFIG = {
 }
 ```
 
-### 4. 运行应用
+### 4. Run the Application
 ```bash
 python app.py
 ```
 
-访问 `http://localhost:5000` 查看应用。
+Visit `http://localhost:5000` to view the application.
 
-## API接口
+## API Endpoints
 
-### 主要API端点
-- `GET /api/overview` - 数据概览统计
-- `GET /api/stations` - 观测站点列表
-- `GET /api/species` - 植物物种信息
-- `GET /api/phases` - 物候期信息
-- `GET /api/observations` - 观测数据（支持筛选）
-- `GET /api/trends` - 趋势分析数据
-- `GET /api/quality` - 数据质量统计
+### Main API Endpoints
+- `GET /api/overview` - Data overview statistics
+- `GET /api/stations` - Observation station list
+- `GET /api/species` - Plant species information
+- `GET /api/phases` - Phenological phase information
+- `GET /api/observations` - Observation data (supports filtering)
+- `GET /api/trends` - Trend analysis data
+- `GET /api/quality` - Data quality statistics
 
-### 筛选参数
-observations接口支持以下筛选参数：
-- `station_id`: 站点ID
-- `species_id`: 物种ID
-- `phase_id`: 物候期ID
-- `year_start`: 起始年份
-- `year_end`: 结束年份
-- `limit`: 返回记录数限制
+### Filter Parameters
+The observations endpoint supports the following filter parameters:
+- `station_id`: Station ID
+- `species_id`: Species ID
+- `phase_id`: Phenological phase ID
+- `year_start`: Start year
+- `year_end`: End year
+- `limit`: Limit on number of records returned
 
-## 数据来源
+## Data Source
 
-本项目使用德国气象局(DWD)公开的植物物候观测数据：
-- **数据来源**: DWD Climate Data Center (CDC)
-- **时间跨度**: 1953年至今
-- **观测内容**: 植物发芽、开花、结果、落叶等物候期
-- **空间覆盖**: 德国全境1000+观测站点
+This project uses publicly available plant phenology observation data from the German Meteorological Service (DWD):
+- **Data Source**: DWD Climate Data Center (CDC)
+- **Time Span**: 1953 to present
+- **Observation Content**: Plant budding, flowering, fruiting, leaf-fall, and other phenological phases
+- **Spatial Coverage**: 1000+ observation stations across Germany
 
-## 许可证
+## License
 
-本项目遵循MIT许可证。数据来源于德国气象局，遵循其开放数据政策。
+This project is licensed under the MIT License. The data comes from the German Meteorological Service and follows its open data policy.
 
-## 贡献
+## Contributing
 
-欢迎提交Issue和Pull Request来改进这个项目。
+Issues and Pull Requests are welcome to help improve this project.
 
-## 联系
+## Contact
 
-如有问题或建议，请通过GitHub Issues联系。
+For questions or suggestions, please reach out via GitHub Issues.
